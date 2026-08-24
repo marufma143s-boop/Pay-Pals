@@ -1,0 +1,6 @@
+{
+  "name": "PayPulse",
+  "description": "Professional Campaign, Referral, Task, Wallet and Reward Management Platform with English UI and BDT currency.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
