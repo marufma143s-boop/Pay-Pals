@@ -30,11 +30,13 @@ import androidx.compose.ui.unit.dp
 import com.example.components.AppStatCard
 import com.example.components.CampaignCard
 import com.example.components.MainAppHeader
+import com.example.components.ReferralCampaignPromoBanner
 import com.example.components.ReferralCard
 import com.example.components.SectionHeader
 import com.example.components.TransactionCard
 import com.example.components.WalletCard
 import com.example.components.WalletQuickActionButtons
+import com.example.components.OnlineUsersCard
 import com.example.model.Campaign
 import com.example.model.ReferralUser
 import com.example.model.Transaction
@@ -100,6 +102,11 @@ fun HomeScreen(
                     onToggleVisibility = { repository.toggleBalanceVisibility() }
                 )
             }
+            
+            // Online Users Card
+            item {
+                OnlineUsersCard()
+            }
 
             // 2. Separate Action Button Cards Below Wallet
             item {
@@ -109,6 +116,8 @@ fun HomeScreen(
                     onHistoryClick = onNavigateToTransactions
                 )
             }
+            
+
 
             // 3. Statistics Grid (4 Cards, 2 per row)
             item {
@@ -172,7 +181,14 @@ fun HomeScreen(
                 }
             }
 
-            // 4. Recent Transactions (Exactly 5)
+            // 4. Referral & Campaign Promotion Banner Card
+            item {
+                ReferralCampaignPromoBanner(
+                    onReferClick = onNavigateToRefer
+                )
+            }
+
+            // 5. Recent Transactions (Exactly 5)
             item {
                 SectionHeader(
                     title = "Recent Transactions",

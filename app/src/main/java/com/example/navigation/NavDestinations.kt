@@ -2,6 +2,8 @@ package com.example.navigation
 
 sealed class Screen(val route: String) {
     object Splash : Screen("splash")
+    object Login : Screen("login")
+    object Register : Screen("register")
     
     // Bottom Nav Tabs
     object Home : Screen("home")

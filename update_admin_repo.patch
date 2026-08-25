@@ -1,0 +1,30 @@
+--- app/src/main/java/com/example/repository/AppRepository.kt
++++ app/src/main/java/com/example/repository/AppRepository.kt
+@@ -34,6 +34,12 @@
+     
+     private val _withdrawalMethods = MutableStateFlow(listOf("bKash", "Nagad", "Binance USDT"))
+     val withdrawalMethods: StateFlow<List<String>> = _withdrawalMethods.asStateFlow()
++    
++    private val _adminDepositRequests = MutableStateFlow<List<Map<String, Any?>>>(emptyList())
++    val adminDepositRequests: StateFlow<List<Map<String, Any?>>> = _adminDepositRequests.asStateFlow()
++    
++    private val _adminWithdrawalRequests = MutableStateFlow<List<Map<String, Any?>>>(emptyList())
++    val adminWithdrawalRequests: StateFlow<List<Map<String, Any?>>> = _adminWithdrawalRequests.asStateFlow()
+ 
+     private val _isDarkMode = MutableStateFlow(prefs.getBoolean("is_dark_mode", false))
+     val isDarkMode: StateFlow<Boolean> = _isDarkMode.asStateFlow()
+@@ -256,6 +262,22 @@
+                 _withdrawalMethods.value = withMethods
+             }
+         }
++        
++        com.example.data.FirebaseRealtimeDbManager.attachAdminDepositsListener { requests ->
++            _adminDepositRequests.value = requests
++        }
++        
++        com.example.data.FirebaseRealtimeDbManager.attachAdminWithdrawalsListener { requests ->
++            _adminWithdrawalRequests.value = requests
++        }
+     }
+ 
+     private fun loadSavedSession() {

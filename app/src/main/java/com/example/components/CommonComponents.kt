@@ -636,12 +636,37 @@ fun CampaignCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = campaign.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = campaign.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = when (campaign.networkType.lowercase()) {
+                                "blogger" -> Color(0xFF3B82F6).copy(alpha = 0.2f)
+                                "monetag" -> Color(0xFF10B981).copy(alpha = 0.2f)
+                                else -> Color(0xFFF59E0B).copy(alpha = 0.2f)
+                            }
+                        ) {
+                            Text(
+                                text = campaign.networkDisplayName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = when (campaign.networkType.lowercase()) {
+                                    "blogger" -> Color(0xFF60A5FA)
+                                    "monetag" -> Color(0xFF34D399)
+                                    else -> Color(0xFFFBBF24)
+                                },
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(top = 2.dp)
@@ -1334,5 +1359,135 @@ fun EmptyStateView(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
+    }
+}
+
+@Composable
+fun ReferralCampaignPromoBanner(
+    onReferClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 10.dp,
+                shape = RoundedCornerShape(20.dp),
+                spotColor = PurpleNeon
+            )
+            .clickable { onReferClick() }
+            .testTag("referral_campaign_promo_banner"),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF3F1477),
+                            Color(0xFF220844),
+                            Color(0xFF13042A)
+                        )
+                    )
+                )
+                .border(
+                    width = 1.2.dp,
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            GoldAccent,
+                            PurpleNeon,
+                            PurplePrimary
+                        )
+                    ),
+                    shape = RoundedCornerShape(20.dp)
+                )
+                .padding(18.dp)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Top Badge Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = GoldAccent.copy(alpha = 0.2f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, GoldAccent.copy(alpha = 0.7f))
+                    ) {
+                        Text(
+                            text = "🔥 REFER & EARN",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = GoldAccent,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = PurpleNeon.copy(alpha = 0.25f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, PurpleNeon.copy(alpha = 0.6f))
+                    ) {
+                        Text(
+                            text = "🪙 100 Credits / Friend",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+
+                // Clean Bold Title (No long description)
+                Text(
+                    text = "Invite Friends & Earn Unlimited Credits!",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 17.sp
+                    ),
+                    color = Color.White,
+                    lineHeight = 22.sp
+                )
+
+                // Action Button
+                Button(
+                    onClick = onReferClick,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(46.dp)
+                        .testTag("promo_banner_refer_button"),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = PurplePrimary
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "Invite Friends Now",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Go to Refer",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
     }
 }

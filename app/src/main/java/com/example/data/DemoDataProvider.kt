@@ -152,6 +152,7 @@ object DemoDataProvider {
         Campaign(
             id = "cmp_101",
             title = "Website Promotion",
+            networkType = "adstra",
             targetLink = "https://example.com/promo",
             packagePrice = 5000.0,
             targetViews = 1000,
@@ -162,6 +163,7 @@ object DemoDataProvider {
         Campaign(
             id = "cmp_102",
             title = "E-Commerce Summer Sale",
+            networkType = "monetag",
             targetLink = "https://shopnow.com/summer-deals",
             packagePrice = 10000.0,
             targetViews = 4000,
@@ -172,6 +174,7 @@ object DemoDataProvider {
         Campaign(
             id = "cmp_103",
             title = "App Install Campaign",
+            networkType = "adstra",
             targetLink = "https://play.google.com/store/apps/details?id=sample.app",
             packagePrice = 20000.0,
             targetViews = 10000,
@@ -182,6 +185,7 @@ object DemoDataProvider {
         Campaign(
             id = "cmp_104",
             title = "Tech Blog Traffic",
+            networkType = "blogger",
             targetLink = "https://techpulse.blog/ai-trends",
             packagePrice = 3000.0,
             targetViews = 500,
@@ -192,6 +196,7 @@ object DemoDataProvider {
         Campaign(
             id = "cmp_105",
             title = "Fintech Product Launch",
+            networkType = "blogger",
             targetLink = "https://finhub.io/signup",
             packagePrice = 5000.0,
             targetViews = 1000,
@@ -202,6 +207,7 @@ object DemoDataProvider {
         Campaign(
             id = "cmp_106",
             title = "Social Community Growth",
+            networkType = "monetag",
             targetLink = "https://community.hub/join",
             packagePrice = 3000.0,
             targetViews = 500,

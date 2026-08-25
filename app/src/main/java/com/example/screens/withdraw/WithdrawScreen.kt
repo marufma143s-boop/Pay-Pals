@@ -52,6 +52,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.LaunchedEffect
 import com.example.components.SubScreenTopBar
 import com.example.components.SuccessDialogView
 import com.example.repository.AppRepository
@@ -70,7 +71,14 @@ fun WithdrawScreen(
     val walletState by repository.walletState.collectAsState()
 
     var amountText by remember { mutableStateOf("") }
-    var selectedMethod by remember { mutableStateOf("Mobile Banking") }
+    val withdrawalMethods by repository.withdrawalMethods.collectAsState()
+    var selectedMethod by remember { mutableStateOf("bKash") }
+    
+    LaunchedEffect(withdrawalMethods) {
+        if (withdrawalMethods.isNotEmpty() && !withdrawalMethods.contains(selectedMethod)) {
+            selectedMethod = withdrawalMethods.first()
+        }
+    }
     var accountNumber by remember { mutableStateOf("") }
     var accountHolderName by remember { mutableStateOf("") }
 

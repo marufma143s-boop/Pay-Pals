@@ -43,14 +43,18 @@ enum class SupportCategory(val title: String) {
 }
 
 data class UserProfile(
-    val username: String = "@maruf123",
-    val fullName: String = "Maruf Hossain",
-    val email: String = "maruf@example.com",
-    val phone: String = "+8801712345678",
-    val accountId: String = "PP-982314",
-    val registrationDate: String = "Aug 15, 2026",
-    val referralCode: String = "MARUF123",
-    val appliedReferralCode: String? = null
+    val id: String = "user_default",
+    val username: String = "@user",
+    val fullName: String = "New User",
+    val contactType: String = "phone", // "phone" or "email"
+    val contactValue: String = "",
+    val email: String = "",
+    val phone: String = "",
+    val accountId: String = "PP-100001",
+    val registrationDate: String = "Today",
+    val referralCode: String = "PULSE100",
+    val appliedReferralCode: String? = null,
+    val isLoggedIn: Boolean = false
 )
 
 data class WalletState(
@@ -84,6 +88,7 @@ data class CampaignPackage(
 data class Campaign(
     val id: String,
     val title: String,
+    val networkType: String = "adstra", // "adstra", "blogger", "monetag"
     val targetLink: String,
     val packagePrice: Double,
     val targetViews: Int,
@@ -96,6 +101,14 @@ data class Campaign(
 
     val remainingViews: Int
         get() = (targetViews - completedViews).coerceAtLeast(0)
+
+    val networkDisplayName: String
+        get() = when (networkType.lowercase()) {
+            "adstra", "adsterra" -> "Adsterra"
+            "blogger" -> "Blogger"
+            "monetag" -> "Monetag"
+            else -> "Adsterra"
+        }
 }
 
 data class ReferralUser(

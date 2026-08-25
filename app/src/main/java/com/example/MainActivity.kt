@@ -31,6 +31,8 @@ import androidx.navigation.navArgument
 import com.example.components.AppBottomNavigationBar
 import com.example.navigation.Screen
 import com.example.repository.AppRepository
+import com.example.screens.auth.LoginScreen
+import com.example.screens.auth.RegisterScreen
 import com.example.screens.account.AboutUsScreen
 import com.example.screens.account.AccountDetailsScreen
 import com.example.screens.account.DeveloperProfileScreen
@@ -125,8 +127,38 @@ fun PayPulseApp(repository: AppRepository) {
                 composable(Screen.Splash.route) {
                     SplashScreen(
                         onSplashFinished = {
-                            navController.navigate(Screen.Home.route) {
+                            val target = if (repository.isLoggedIn.value) Screen.Home.route else Screen.Login.route
+                            navController.navigate(target) {
                                 popUpTo(Screen.Splash.route) { inclusive = true }
+                            }
+                        }
+                    )
+                }
+
+                // Auth Screens
+                composable(Screen.Login.route) {
+                    LoginScreen(
+                        repository = repository,
+                        onNavigateToRegister = { navController.navigate(Screen.Register.route) },
+                        onLoginSuccess = {
+                            navController.navigate(Screen.Home.route) {
+                                popUpTo(Screen.Login.route) { inclusive = true }
+                            }
+                        }
+                    )
+                }
+
+                composable(Screen.Register.route) {
+                    RegisterScreen(
+                        repository = repository,
+                        onNavigateToLogin = {
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo(Screen.Register.route) { inclusive = true }
+                            }
+                        },
+                        onRegistrationSuccess = {
+                            navController.navigate(Screen.Home.route) {
+                                popUpTo(Screen.Register.route) { inclusive = true }
                             }
                         }
                     )
@@ -195,7 +227,20 @@ fun PayPulseApp(repository: AppRepository) {
                         onNavigateToSupportCenter = { navController.navigate(Screen.SupportCenter.route) },
                         onNavigateToPrivacyPolicy = { navController.navigate(Screen.PrivacyPolicy.route) },
                         onNavigateToAboutUs = { navController.navigate(Screen.AboutUs.route) },
-                        onNavigateToDeveloperProfile = { navController.navigate(Screen.DeveloperProfile.route) }
+                        onNavigateToDeveloperProfile = { navController.navigate(Screen.DeveloperProfile.route) },
+                        onNavigateToAdminDashboard = { navController.navigate("admin_dashboard") },
+                        onLogout = {
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        }
+                    )
+                }
+
+                composable("admin_dashboard") {
+                    com.example.screens.admin.AdminDashboardScreen(
+                        repository = repository,
+                        onBackClick = { navController.popBackStack() }
                     )
                 }
 

@@ -300,7 +300,7 @@ fun ReferScreen(
                             )
 
                             Text(
-                                text = "Enter an inviter's referral code to receive an instant 100 Credits signup bonus.",
+                                text = "Enter an inviter's referral code to receive an instant 50 Credits bonus. Both you and your friend earn rewards!",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
@@ -323,12 +323,19 @@ fun ReferScreen(
                                             modifier = Modifier.size(20.dp)
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Referral code applied: ${userProfile.appliedReferralCode}",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = SuccessGreen,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                        Column {
+                                            Text(
+                                                text = "Referral Offer Claimed",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = SuccessGreen,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = "Applied code: ${userProfile.appliedReferralCode}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = SuccessGreen.copy(alpha = 0.85f)
+                                            )
+                                        }
                                     }
                                 }
                             } else {
@@ -372,16 +379,15 @@ fun ReferScreen(
                                         applyMessage = null
 
                                         coroutineScope.launch {
-                                            delay(600)
                                             val result = repository.applyReferralCode(referralInput)
                                             isApplying = false
                                             result.onSuccess {
                                                 isApplySuccess = true
-                                                applyMessage = "Referral code applied successfully. 100 Credits added to your wallet!"
+                                                applyMessage = "Referral code applied successfully! 50 Credits added to your wallet."
                                                 referralInput = ""
                                             }.onFailure { ex ->
                                                 isApplySuccess = false
-                                                applyMessage = ex.message ?: "Invalid referral code."
+                                                applyMessage = ex.message ?: "Offer already claimed or invalid code."
                                             }
                                         }
                                     },

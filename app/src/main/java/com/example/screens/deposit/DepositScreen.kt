@@ -41,6 +41,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -57,7 +58,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.components.SubScreenTopBar
 import com.example.components.SuccessDialogView
-import com.example.model.PaymentMethod
 import com.example.repository.AppRepository
 import com.example.ui.theme.DarkPurpleCard
 import com.example.ui.theme.DeepViolet
@@ -78,21 +78,28 @@ fun DepositScreen(
     modifier: Modifier = Modifier
 ) {
     val walletState by repository.walletState.collectAsState()
-
     var amountText by remember { mutableStateOf("") }
-    var selectedMethod by remember { mutableStateOf(PaymentMethod.BKASH) }
+    
+    val depositMethods by repository.depositMethods.collectAsState()
+    var selectedMethod by remember { mutableStateOf("bKash") }
+    
+    LaunchedEffect(depositMethods) {
+        if (depositMethods.isNotEmpty() && !depositMethods.contains(selectedMethod)) {
+            selectedMethod = depositMethods.first()
+        }
+    }
+    
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showSuccessDialog by remember { mutableStateOf(false) }
     var depositedAmount by remember { mutableStateOf(0.0) }
-
     val quickAmounts = listOf(500, 1000, 2000, 5000, 10000)
     val coroutineScope = rememberCoroutineScope()
 
     if (showSuccessDialog) {
         SuccessDialogView(
             title = "Deposit Successful",
-            message = "${FormatUtils.formatCredits(depositedAmount)} has been credited to your PayPulse wallet.",
+            message = "${FormatUtils.formatCredits(depositedAmount)} deposit request has been submitted to your PayPulse wallet.",
             buttonText = "Done",
             onDismiss = {
                 showSuccessDialog = false
@@ -118,48 +125,37 @@ fun DepositScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            // Current Balance Card
+            // Wallet Balance Header
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(130.dp),
+                shape = RoundedCornerShape(24.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
             ) {
-                Row(
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .fillMaxSize()
+                        .background(WalletGradientBrush)
                 ) {
-                    Column {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        verticalArrangement = Arrangement.Center
+                    ) {
                         Text(
                             text = "Current Balance",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = Color.White.copy(alpha = 0.8f)
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = FormatUtils.formatCredits(walletState.balance),
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
+                            style = MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
                         )
-                    }
-
-                    Surface(
-                        shape = CircleShape,
-                        color = PurplePrimary.copy(alpha = 0.15f),
-                        modifier = Modifier.size(46.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = "C",
-                                style = MaterialTheme.typography.headlineSmall,
-                                color = PurplePrimary,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
                     }
                 }
             }
@@ -177,35 +173,39 @@ fun DepositScreen(
                         .padding(18.dp)
                 ) {
                     Text(
-                        text = "Deposit Amount",
+                        text = "Enter Deposit Amount",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Bold
                     )
-
                     Spacer(modifier = Modifier.height(12.dp))
 
                     OutlinedTextField(
                         value = amountText,
-                        onValueChange = {
-                            amountText = it.filter { ch -> ch.isDigit() || ch == '.' }
-                            errorMessage = null
+                        onValueChange = { newValue ->
+                            if (newValue.isEmpty() || newValue.matches(Regex("^\\d*\\.?\\d*\$"))) {
+                                amountText = newValue
+                                errorMessage = null
+                            }
                         },
-                        placeholder = { Text("Enter credits") },
-                        prefix = {
-                            Text(text = "🪙 ", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                        },
-                        textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("deposit_amount_input"),
+                        leadingIcon = {
+                            Text(
+                                text = "🪙",
+                                modifier = Modifier.padding(start = 12.dp),
+                                fontSize = 18.sp
+                            )
+                        },
+                        placeholder = { Text("0.00") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         shape = RoundedCornerShape(14.dp),
+                        singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = PurplePrimary,
+                            focusedBorderColor = PurpleNeon,
                             unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                        ),
-                        isError = errorMessage != null
+                        )
                     )
 
                     if (errorMessage != null) {
@@ -219,15 +219,12 @@ fun DepositScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Quick Select Amount Chips
                     Text(
                         text = "Quick Select",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-
                     Spacer(modifier = Modifier.height(8.dp))
-
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth()
@@ -274,16 +271,9 @@ fun DepositScreen(
                         color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Bold
                     )
-
                     Spacer(modifier = Modifier.height(12.dp))
-
-                    val methods = listOf(
-                        Triple(PaymentMethod.BKASH, Icons.Filled.PhoneAndroid, "Instant Mobile Banking"),
-                        Triple(PaymentMethod.BANK, Icons.Filled.AccountBalance, "Direct Bank Wire"),
-                        Triple(PaymentMethod.OTHER, Icons.Filled.CreditCard, "Cards & Digital Wallets")
-                    )
-
-                    methods.forEach { (method, icon, desc) ->
+                    
+                    depositMethods.forEach { method ->
                         val isSelected = selectedMethod == method
                         Surface(
                             modifier = Modifier
@@ -295,7 +285,7 @@ fun DepositScreen(
                                     color = if (isSelected) PurplePrimary else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
                                     shape = RoundedCornerShape(14.dp)
                                 )
-                                .testTag("payment_method_${method.id}"),
+                                .testTag("payment_method_${method.replace(" ", "_")}"),
                             shape = RoundedCornerShape(14.dp),
                             color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surface
                         ) {
@@ -311,26 +301,20 @@ fun DepositScreen(
                                     modifier = Modifier.size(38.dp)
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Filled.AccountBalance, contentDescription=null, modifier=Modifier.size(20.dp), tint = Color.White)
                                     }
                                 }
-
                                 Spacer(modifier = Modifier.width(12.dp))
-
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = method.title,
+                                        text = method,
                                         style = MaterialTheme.typography.titleMedium,
                                         color = MaterialTheme.colorScheme.onSurface,
                                         fontWeight = FontWeight.SemiBold
                                     )
-                                    Text(
-                                        text = "${method.subtitle} • $desc",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
                                 }
-
                                 if (isSelected) {
+                                    Icon(Icons.Filled.Check, contentDescription = null, tint = PurplePrimary)
                                 }
                             }
                         }
@@ -346,12 +330,10 @@ fun DepositScreen(
                         errorMessage = "Please enter a valid deposit amount."
                         return@Button
                     }
-
                     isLoading = true
                     errorMessage = null
-
                     coroutineScope.launch {
-                        delay(900) // Realistic processing feedback
+                        delay(900)
                         val result = repository.deposit(amount, selectedMethod)
                         isLoading = false
                         result.onSuccess {
@@ -393,7 +375,6 @@ fun DepositScreen(
                     )
                 }
             }
-
             Spacer(modifier = Modifier.height(40.dp))
         }
     }

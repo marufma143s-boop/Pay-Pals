@@ -72,6 +72,7 @@ fun CampaignDetailScreen(
 ) {
     val context = LocalContext.current
     val campaigns by repository.campaigns.collectAsState()
+    val preferredBrowser by repository.preferredBrowser.collectAsState()
     val campaign = campaigns.firstOrNull { it.id == campaignId }
 
     Column(
@@ -126,17 +127,35 @@ fun CampaignDetailScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = Color.White.copy(alpha = 0.2f)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Text(
-                                        text = campaign.id.uppercase(),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    )
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = Color.White.copy(alpha = 0.2f)
+                                    ) {
+                                        Text(
+                                            text = campaign.id.uppercase(),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = GoldAccent.copy(alpha = 0.25f)
+                                    ) {
+                                        Text(
+                                            text = campaign.networkDisplayName,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = GoldAccent,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
                                 }
 
                                 StatusBadge(
@@ -329,10 +348,11 @@ fun CampaignDetailScreen(
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Button(
                                         onClick = {
-                                            try {
-                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(campaign.targetLink))
-                                                context.startActivity(intent)
-                                            } catch (_: Exception) {}
+                                            com.example.utils.CustomTabsHelper.openCustomTab(
+                                                context = context,
+                                                url = campaign.targetLink,
+                                                preferredBrowser = preferredBrowser
+                                            )
                                         },
                                         shape = RoundedCornerShape(8.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = PurplePrimary),
