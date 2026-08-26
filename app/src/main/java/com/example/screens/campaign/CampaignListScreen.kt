@@ -62,72 +62,92 @@ fun CampaignListScreen(
         }
     }
 
-    Column(
+    androidx.compose.foundation.layout.Box(
         modifier = modifier
             .fillMaxSize()
             .testTag("campaign_list_screen")
     ) {
-        SubScreenTopBar(
-            title = "My Campaigns",
-            onBackClick = onBackClick
-        )
-
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp)
+            modifier = Modifier.fillMaxSize()
         ) {
-            // Filter Tabs
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            SubScreenTopBar(
+                title = "My Campaigns",
+                onBackClick = onBackClick
+            )
+
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
             ) {
-                items(filterOptions) { filter ->
-                    FilterChip(
-                        selected = selectedFilter == filter,
-                        onClick = { selectedFilter = filter },
-                        label = {
-                            Text(
-                                text = filter,
-                                fontWeight = if (selectedFilter == filter) FontWeight.Bold else FontWeight.Normal
-                            )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = PurplePrimary,
-                            selectedLabelColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            if (filteredCampaigns.isEmpty()) {
-                EmptyStateView(
-                    icon = Icons.Outlined.Campaign,
-                    title = "No Campaigns Yet",
-                    message = "No campaigns found matching '$selectedFilter'. Create your first promotion campaign now!"
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                // Filter Tabs
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
                 ) {
-                    items(filteredCampaigns, key = { it.id }) { cmp ->
-                        CampaignCard(
-                            campaign = cmp,
-                            onClick = { onCampaignClick(cmp.id) }
+                    items(filterOptions) { filter ->
+                        FilterChip(
+                            selected = selectedFilter == filter,
+                            onClick = { selectedFilter = filter },
+                            label = {
+                                Text(
+                                    text = filter,
+                                    fontWeight = if (selectedFilter == filter) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = PurplePrimary,
+                                selectedLabelColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(10.dp)
                         )
                     }
+                }
 
-                    item {
-                        Spacer(modifier = Modifier.height(40.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (filteredCampaigns.isEmpty()) {
+                    EmptyStateView(
+                        icon = Icons.Outlined.Campaign,
+                        title = "No Campaigns Yet",
+                        message = "No campaigns found matching '$selectedFilter'. Create your first promotion campaign now!"
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(filteredCampaigns, key = { it.id }) { cmp ->
+                            CampaignCard(
+                                campaign = cmp,
+                                onClick = { onCampaignClick(cmp.id) }
+                            )
+                        }
+
+                        item {
+                            Spacer(modifier = Modifier.height(80.dp))
+                        }
                     }
                 }
             }
+        }
+
+        FloatingActionButton(
+            onClick = onCreateCampaignClick,
+            modifier = Modifier
+                .align(androidx.compose.ui.Alignment.BottomEnd)
+                .padding(24.dp)
+                .testTag("create_campaign_fab"),
+            containerColor = PurplePrimary,
+            contentColor = Color.White,
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Add,
+                contentDescription = "Create Campaign"
+            )
         }
     }
 }

@@ -429,8 +429,18 @@ fun ReferScreen(
                     )
                 }
 
-                items(referrals, key = { it.id }) { ref ->
-                    ReferralCard(referral = ref)
+                if (referrals.isEmpty()) {
+                    item {
+                        com.example.components.EmptyStateView(
+                            icon = Icons.Outlined.People,
+                            title = "No Referrals Yet",
+                            message = "Share your referral code with friends and family to start earning bonuses!"
+                        )
+                    }
+                } else {
+                    items(referrals, key = { it.id }) { ref ->
+                        ReferralCard(referral = ref)
+                    }
                 }
 
                 item {

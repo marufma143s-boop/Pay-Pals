@@ -23,7 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -35,20 +35,46 @@ import com.example.ui.theme.PurplePrimary
 import com.example.ui.theme.SuccessGreen
 import kotlinx.coroutines.delay
 import java.text.DecimalFormat
-import kotlin.random.Random
+import kotlin.math.sin
+import java.util.Random
+
+// Calculates deterministic synced online count between minUsers and maxUsers for all users at any given timestamp
+fun calculateSyncedOnlineUsers(
+    minUsers: Int = 50,
+    maxUsers: Int = 1000,
+    timeMs: Long = System.currentTimeMillis()
+): Int {
+    val actualMin = if (minUsers < 1) 1 else minUsers
+    val actualMax = if (maxUsers < actualMin) actualMin else maxUsers
+    val range = actualMax - actualMin
+    if (range <= 0) return actualMin
+
+    val intervalStep = timeMs / 3500L // synced interval step every 3.5 seconds
+    val rand = Random(intervalStep xor 0x5DEECE66DL)
+    
+    // Normalized smooth sine cycle [0.0, 1.0]
+    val cycle = (sin((intervalStep % 1000) * 0.02) + 1.0) / 2.0 // 0.0 to 1.0
+    val shortVariation = (sin((intervalStep % 100) * 0.25)) * 0.08 // -0.08 to +0.08
+    val jitterFraction = ((rand.nextDouble() - 0.5) * 0.06) // -0.03 to +0.03
+
+    val combinedFraction = (0.2 + 0.6 * cycle + shortVariation + jitterFraction).coerceIn(0.0, 1.0)
+    val calculated = (actualMin + (range * combinedFraction)).toInt()
+    return calculated.coerceIn(actualMin, actualMax)
+}
 
 @Composable
-fun OnlineUsersCard() {
-    var onlineUsers by remember { mutableStateOf(Random.nextInt(500, 1500)) }
+fun OnlineUsersCard(
+    minUsers: Int = 50,
+    maxUsers: Int = 1000
+) {
+    var onlineUsers by remember(minUsers, maxUsers) { 
+        mutableIntStateOf(calculateSyncedOnlineUsers(minUsers, maxUsers)) 
+    }
 
-    LaunchedEffect(Unit) {
-        while(true) {
-            delay(Random.nextLong(2500, 5000))
-            val change = Random.nextInt(-35, 45)
-            var newCount = onlineUsers + change
-            if (newCount < 50) newCount = 50 + Random.nextInt(10, 50)
-            if (newCount > 10000) newCount = 10000 - Random.nextInt(10, 50)
-            onlineUsers = newCount
+    LaunchedEffect(minUsers, maxUsers) {
+        while (true) {
+            onlineUsers = calculateSyncedOnlineUsers(minUsers, maxUsers)
+            delay(3500L)
         }
     }
 

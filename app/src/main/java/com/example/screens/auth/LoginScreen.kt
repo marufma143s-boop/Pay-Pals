@@ -172,7 +172,7 @@ fun LoginScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("login_contact_input"),
-                            placeholder = { Text("01XXXXXXXXX or example@gmail.com") },
+                            placeholder = { Text("email or number") },
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.AccountCircle,

@@ -88,6 +88,9 @@ fun CreateCampaignScreen(
 ) {
     val walletState by repository.walletState.collectAsState()
     val campaignRates by repository.campaignRates.collectAsState()
+    val serviceSettings by repository.serviceControlSettings.collectAsState()
+    val isCampaignDisabled = serviceSettings.isServiceDisabled("campaigns")
+    val campaignReason = serviceSettings.getServiceReason("campaigns")
     
     val networks = listOf(
         NetworkOption(
@@ -157,6 +160,38 @@ fun CreateCampaignScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             item { Spacer(modifier = Modifier.height(4.dp)) }
+
+            if (isCampaignDisabled) {
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = ErrorRed.copy(alpha = 0.12f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, ErrorRed.copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Filled.Campaign, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "ক্যাম্পেইন সার্ভিস সাময়িকভাবে বন্ধ আছে",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = ErrorRed
+                                )
+                                Text(
+                                    text = campaignReason.ifBlank { "সাময়িক রক্ষণাবেক্ষণের কারণে নতুন ক্যাম্পেইন তৈরি বন্ধ আছে।" },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+            }
 
             item {
                 Text(
@@ -450,10 +485,10 @@ fun CreateCampaignScreen(
                         .fillMaxWidth()
                         .height(54.dp)
                         .testTag("submit_campaign_button"),
-                    enabled = !isLoading,
+                    enabled = !isLoading && !isCampaignDisabled,
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = PurplePrimary,
+                        containerColor = if (isCampaignDisabled) Color.Gray else PurplePrimary,
                         contentColor = Color.White
                     )
                 ) {
@@ -477,7 +512,7 @@ fun CreateCampaignScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Submit Campaign",
+                            text = if (isCampaignDisabled) "Campaign Service Closed" else "Submit Campaign",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )

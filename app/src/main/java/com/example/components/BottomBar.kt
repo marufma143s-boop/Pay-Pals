@@ -1,4 +1,6 @@
 package com.example.components
+import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material.icons.outlined.CardGiftcard
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.outlined.Language
 
@@ -69,7 +71,7 @@ fun AppBottomNavigationBar(
         BottomNavItem(Screen.Home.route, "Home", Icons.Filled.Home, Icons.Outlined.Home),
         BottomNavItem(Screen.VisitEarn.route, "Visit Earn", Icons.Filled.Language, Icons.Outlined.Language),
         BottomNavItem(Screen.CreateCampaign.route, "Plus", Icons.Filled.Add, Icons.Filled.Add, isCenterPlus = true),
-        BottomNavItem(Screen.Tasks.route, "Tasks", Icons.Outlined.TaskAlt, Icons.Outlined.TaskAlt),
+        BottomNavItem(Screen.Packages.route, "Package", Icons.Filled.CardGiftcard, Icons.Outlined.CardGiftcard),
         BottomNavItem(Screen.MyAccount.route, "My Account", Icons.Filled.Person, Icons.Outlined.Person)
     )
 

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
@@ -336,6 +337,8 @@ fun WalletQuickActionButtons(
     onDepositClick: () -> Unit,
     onWithdrawClick: () -> Unit,
     onHistoryClick: () -> Unit,
+    isDepositDisabled: Boolean = false,
+    isWithdrawDisabled: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -345,9 +348,10 @@ fun WalletQuickActionButtons(
         // 1. Deposit Button Card
         WalletActionCard(
             title = "Deposit",
-            subtitle = "Add Funds",
+            subtitle = if (isDepositDisabled) "Closed" else "Add Funds",
             icon = Icons.Filled.ArrowDownward,
-            accentColor = SuccessGreen,
+            accentColor = if (isDepositDisabled) Color.Gray else SuccessGreen,
+            isDisabled = isDepositDisabled,
             onClick = onDepositClick,
             testTag = "wallet_action_deposit",
             modifier = Modifier.weight(1f)
@@ -356,9 +360,10 @@ fun WalletQuickActionButtons(
         // 2. Withdraw Button Card
         WalletActionCard(
             title = "Withdraw",
-            subtitle = "Cash Out",
+            subtitle = if (isWithdrawDisabled) "Closed" else "Cash Out",
             icon = Icons.Filled.ArrowUpward,
-            accentColor = WarningOrange,
+            accentColor = if (isWithdrawDisabled) Color.Gray else WarningOrange,
+            isDisabled = isWithdrawDisabled,
             onClick = onWithdrawClick,
             testTag = "wallet_action_withdraw",
             modifier = Modifier.weight(1f)
@@ -370,6 +375,7 @@ fun WalletQuickActionButtons(
             subtitle = "Logs",
             icon = Icons.Filled.History,
             accentColor = PurpleNeon,
+            isDisabled = false,
             onClick = onHistoryClick,
             testTag = "wallet_action_history",
             modifier = Modifier.weight(1f)
@@ -385,16 +391,17 @@ fun WalletActionCard(
     accentColor: Color,
     onClick: () -> Unit,
     testTag: String,
+    isDisabled: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier
-            .shadow(4.dp, RoundedCornerShape(18.dp), spotColor = accentColor.copy(alpha = 0.3f))
+            .shadow(if (isDisabled) 1.dp else 4.dp, RoundedCornerShape(18.dp), spotColor = accentColor.copy(alpha = 0.3f))
             .clickable { onClick() }
             .testTag(testTag),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = if (isDisabled) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surface
         )
     ) {
         Column(
@@ -406,14 +413,14 @@ fun WalletActionCard(
         ) {
             Surface(
                 shape = CircleShape,
-                color = accentColor.copy(alpha = 0.15f),
+                color = if (isDisabled) Color.Gray.copy(alpha = 0.2f) else accentColor.copy(alpha = 0.15f),
                 modifier = Modifier.size(42.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = icon,
                         contentDescription = title,
-                        tint = accentColor,
+                        tint = if (isDisabled) Color.Gray else accentColor,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -424,14 +431,14 @@ fun WalletActionCard(
             Text(
                 text = title,
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = if (isDisabled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold
             )
 
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (isDisabled) ErrorRed.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -531,6 +538,7 @@ fun TransactionCard(
         TransactionType.TASK_REWARD -> Triple(Icons.Outlined.MilitaryTech, Color(0xFF3B0764), Color(0xFFC084FC))
         TransactionType.REFERRAL_REWARD -> Triple(Icons.Filled.People, Color(0xFF1E1B4B), Color(0xFF818CF8))
         TransactionType.CAMPAIGN_PAYMENT -> Triple(Icons.Outlined.Campaign, Color(0xFF4C0519), Color(0xFFFB7185))
+        TransactionType.PACKAGE_ORDER -> Triple(Icons.Filled.CardGiftcard, Color(0xFF311042), Color(0xFFE879F9))
     }
 
     Card(

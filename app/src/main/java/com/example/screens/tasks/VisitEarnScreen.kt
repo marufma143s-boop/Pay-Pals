@@ -38,6 +38,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,6 +52,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.components.ServiceDisabledDialog
 import com.example.repository.AppRepository
 import com.example.ui.theme.GoldAccent
 import com.example.ui.theme.PurpleNeon
@@ -68,6 +72,13 @@ fun VisitEarnScreen(
     val bloggerCount by repository.bloggerCount.collectAsState()
     val monetagCount by repository.monetagCount.collectAsState()
     val walletState by repository.walletState.collectAsState()
+    val serviceSettings by repository.serviceControlSettings.collectAsState()
+
+    var disabledServiceDialogInfo by remember { mutableStateOf<Pair<String, String>?>(null) }
+
+    val isAdstraDisabled = serviceSettings.isServiceDisabled("adsterra")
+    val isBloggerDisabled = serviceSettings.isServiceDisabled("blogger")
+    val isMonetagDisabled = serviceSettings.isServiceDisabled("monetag")
 
     val totalVisitsCompleted = adstraCount + bloggerCount + monetagCount
     val totalLimit = repository.adstraLimit + repository.bloggerLimit + repository.monetagLimit
@@ -207,13 +218,20 @@ fun VisitEarnScreen(
             item {
                 NetworkEarningCard(
                     name = "Adstra Earning",
-                    subtitle = "High CPM Partner Visits",
+                    subtitle = if (isAdstraDisabled) "Closed for maintenance" else "High CPM Partner Visits",
                     rewardText = "🪙 25 Credits / Visit",
                     count = adstraCount,
                     limit = repository.adstraLimit,
                     icon = Icons.Filled.AdsClick,
-                    gradientColors = listOf(Color(0xFFE65100), Color(0xFFFF9800)),
-                    onClick = onNavigateToAdstra
+                    gradientColors = if (isAdstraDisabled) listOf(Color.Gray, Color.DarkGray) else listOf(Color(0xFFE65100), Color(0xFFFF9800)),
+                    isDisabled = isAdstraDisabled,
+                    onClick = {
+                        if (isAdstraDisabled) {
+                            disabledServiceDialogInfo = Pair("Adstra Earning", serviceSettings.getServiceReason("adsterra"))
+                        } else {
+                            onNavigateToAdstra()
+                        }
+                    }
                 )
             }
 
@@ -221,13 +239,20 @@ fun VisitEarnScreen(
             item {
                 NetworkEarningCard(
                     name = "Blogger Earning",
-                    subtitle = "Article & Blog Reading Visits",
+                    subtitle = if (isBloggerDisabled) "Closed for maintenance" else "Article & Blog Reading Visits",
                     rewardText = "🪙 20 Credits / Visit",
                     count = bloggerCount,
                     limit = repository.bloggerLimit,
                     icon = Icons.Filled.Public,
-                    gradientColors = listOf(Color(0xFFE91E63), Color(0xFFFF4081)),
-                    onClick = onNavigateToBlogger
+                    gradientColors = if (isBloggerDisabled) listOf(Color.Gray, Color.DarkGray) else listOf(Color(0xFFE91E63), Color(0xFFFF4081)),
+                    isDisabled = isBloggerDisabled,
+                    onClick = {
+                        if (isBloggerDisabled) {
+                            disabledServiceDialogInfo = Pair("Blogger Earning", serviceSettings.getServiceReason("blogger"))
+                        } else {
+                            onNavigateToBlogger()
+                        }
+                    }
                 )
             }
 
@@ -235,19 +260,35 @@ fun VisitEarnScreen(
             item {
                 NetworkEarningCard(
                     name = "Monetag Earning",
-                    subtitle = "Global Direct Link Visits",
+                    subtitle = if (isMonetagDisabled) "Closed for maintenance" else "Global Direct Link Visits",
                     rewardText = "🪙 30 Credits / Visit",
                     count = monetagCount,
                     limit = repository.monetagLimit,
                     icon = Icons.Filled.MonetizationOn,
-                    gradientColors = listOf(Color(0xFF00897B), Color(0xFF00E676)),
-                    onClick = onNavigateToMonetag
+                    gradientColors = if (isMonetagDisabled) listOf(Color.Gray, Color.DarkGray) else listOf(Color(0xFF00897B), Color(0xFF00E676)),
+                    isDisabled = isMonetagDisabled,
+                    onClick = {
+                        if (isMonetagDisabled) {
+                            disabledServiceDialogInfo = Pair("Monetag Earning", serviceSettings.getServiceReason("monetag"))
+                        } else {
+                            onNavigateToMonetag()
+                        }
+                    }
                 )
             }
 
             item {
                 Spacer(modifier = Modifier.height(24.dp))
             }
+        }
+
+        if (disabledServiceDialogInfo != null) {
+            val (title, reason) = disabledServiceDialogInfo!!
+            ServiceDisabledDialog(
+                serviceTitle = title,
+                reason = reason,
+                onDismiss = { disabledServiceDialogInfo = null }
+            )
         }
     }
 }
@@ -262,6 +303,7 @@ fun NetworkEarningCard(
     icon: ImageVector,
     gradientColors: List<Color>,
     onClick: () -> Unit,
+    isDisabled: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val progressFraction = if (limit > 0) (count.toFloat() / limit.toFloat()).coerceIn(0f, 1f) else 0f
@@ -276,11 +318,13 @@ fun NetworkEarningCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(6.dp, RoundedCornerShape(20.dp), spotColor = PurplePrimary)
+            .shadow(if (isDisabled) 1.dp else 6.dp, RoundedCornerShape(20.dp), spotColor = PurplePrimary)
             .clickable { onClick() }
             .testTag("network_card_${name.lowercase().replace(" ", "_")}"),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(
+            containerColor = if (isDisabled) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface
+        )
     ) {
         Column(
             modifier = Modifier
@@ -314,26 +358,26 @@ fun NetworkEarningCard(
                         text = name,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = if (isDisabled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = subtitle,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (isDisabled) Color.Red.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
                 // Reward Badge
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = GoldAccent.copy(alpha = 0.15f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, GoldAccent.copy(alpha = 0.5f))
+                    color = if (isDisabled) Color.Gray.copy(alpha = 0.2f) else GoldAccent.copy(alpha = 0.15f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (isDisabled) Color.Gray else GoldAccent.copy(alpha = 0.5f))
                 ) {
                     Text(
-                        text = rewardText,
+                        text = if (isDisabled) "Closed" else rewardText,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = GoldAccent,
+                        color = if (isDisabled) Color.Gray else GoldAccent,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
@@ -417,7 +461,7 @@ fun NetworkEarningCard(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (isCompleted) "Daily limit reached" else "Tap to start browsing & earn",
+                        text = if (isDisabled) "Service temporarily closed" else if (isCompleted) "Daily limit reached" else "Tap to start browsing & earn",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -426,7 +470,7 @@ fun NetworkEarningCard(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                     contentDescription = "Start",
-                    tint = if (isCompleted) MaterialTheme.colorScheme.onSurfaceVariant else PurpleNeon,
+                    tint = if (isDisabled || isCompleted) MaterialTheme.colorScheme.onSurfaceVariant else PurpleNeon,
                     modifier = Modifier.size(18.dp)
                 )
             }

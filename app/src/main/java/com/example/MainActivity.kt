@@ -55,6 +55,7 @@ import com.example.screens.tasks.BloggerEarningScreen
 import com.example.screens.tasks.MonetagEarningScreen
 import com.example.screens.transactions.TransactionHistoryScreen
 import com.example.screens.withdraw.WithdrawScreen
+import com.example.screens.maintenance.MaintenanceScreen
 import com.example.ui.theme.PayPulseTheme
 
 class MainActivity : ComponentActivity() {
@@ -78,6 +79,24 @@ fun PayPulseApp(repository: AppRepository) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
+    val userProfile by repository.userProfile.collectAsState()
+    val maintenanceSettings by repository.maintenanceSettings.collectAsState()
+    val isOwner = userProfile.role == "OWNER" || userProfile.email == "d@gmail.com"
+
+    val isMaintenanceBlocked = remember(maintenanceSettings, userProfile, currentRoute) {
+        if (currentRoute == Screen.Splash.route) false
+        else if (isOwner) false
+        else if (maintenanceSettings.isMasterEnabled) {
+            if (userProfile.role == "ADMIN") {
+                maintenanceSettings.isAdminMaintenance
+            } else {
+                maintenanceSettings.isUserMaintenance
+            }
+        } else false
+    }
+
+    val isAdminBlocked = userProfile.role == "ADMIN" && !isOwner && maintenanceSettings.isAdminMaintenance
+
     val bottomBarRoutes = setOf(
         Screen.Home.route,
         Screen.VisitEarn.route,
@@ -86,7 +105,7 @@ fun PayPulseApp(repository: AppRepository) {
         Screen.MyAccount.route
     )
 
-    val showBottomBar = currentRoute in bottomBarRoutes
+    val showBottomBar = currentRoute in bottomBarRoutes && !isMaintenanceBlocked
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -343,6 +362,19 @@ fun PayPulseApp(repository: AppRepository) {
                 // 17. Developer Profile
                 composable(Screen.DeveloperProfile.route) {
                     DeveloperProfileScreen(
+                        repository = repository,
+                        onBackClick = { navController.popBackStack() }
+                    )
+                }
+
+                // Live Support Direct Route
+                composable(Screen.LiveSupport.route) {
+                    val userProfile by repository.userProfile.collectAsState()
+                    com.example.screens.support.LiveChatScreen(
+                        repository = repository,
+                        targetUserId = userProfile.id,
+                        targetUserName = "PayPulse Support",
+                        isAdminView = false,
                         onBackClick = { navController.popBackStack() }
                     )
                 }
@@ -370,6 +402,13 @@ fun PayPulseApp(repository: AppRepository) {
                         onBackClick = { navController.popBackStack() }
                     )
                 }
+            }
+
+            if (isMaintenanceBlocked) {
+                MaintenanceScreen(
+                    maintenanceSettings = maintenanceSettings,
+                    isAdminBlocked = isAdminBlocked
+                )
             }
         }
     }

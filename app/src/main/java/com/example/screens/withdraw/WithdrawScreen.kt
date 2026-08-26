@@ -24,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -39,6 +40,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,11 +54,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.runtime.LaunchedEffect
 import com.example.components.SubScreenTopBar
 import com.example.components.SuccessDialogView
 import com.example.repository.AppRepository
 import com.example.ui.theme.ErrorRed
+import com.example.ui.theme.PurpleNeon
 import com.example.ui.theme.PurplePrimary
 import com.example.utils.FormatUtils
 import kotlinx.coroutines.delay
@@ -69,6 +71,9 @@ fun WithdrawScreen(
     modifier: Modifier = Modifier
 ) {
     val walletState by repository.walletState.collectAsState()
+    val serviceSettings by repository.serviceControlSettings.collectAsState()
+    val isWithdrawDisabled = serviceSettings.isServiceDisabled("withdraw")
+    val withdrawReason = serviceSettings.getServiceReason("withdraw")
 
     var amountText by remember { mutableStateOf("") }
     val withdrawalMethods by repository.withdrawalMethods.collectAsState()
@@ -93,7 +98,7 @@ fun WithdrawScreen(
     if (showSuccessDialog) {
         SuccessDialogView(
             title = "Withdrawal Submitted",
-            message = "Your withdrawal request for ${FormatUtils.formatCredits(withdrawnAmount)} has been submitted. Funds will arrive within 24 hours.",
+            message = "Your withdrawal request for ${FormatUtils.formatCredits(withdrawnAmount)} to $selectedMethod ($accountNumber) has been submitted for admin processing.",
             buttonText = "Done",
             onDismiss = {
                 showSuccessDialog = false
@@ -119,6 +124,36 @@ fun WithdrawScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
+            if (isWithdrawDisabled) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = ErrorRed.copy(alpha = 0.12f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ErrorRed.copy(alpha = 0.4f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Info, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(24.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "উইথড্রয়াল সার্ভিস সাময়িকভাবে বন্ধ আছে",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = ErrorRed
+                            )
+                            Text(
+                                text = withdrawReason.ifBlank { "সাময়িক রক্ষণাবেক্ষণের কারণে উইথড্রয়াল বন্ধ আছে।" },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+            }
+
             // Available Balance Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -143,7 +178,7 @@ fun WithdrawScreen(
                         Text(
                             text = FormatUtils.formatCredits(walletState.balance),
                             style = MaterialTheme.typography.headlineMedium,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = PurplePrimary,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -155,11 +190,94 @@ fun WithdrawScreen(
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Text(
-                                text = "C",
-                                style = MaterialTheme.typography.headlineSmall,
-                                color = PurplePrimary,
-                                fontWeight = FontWeight.Bold
+                                text = "🪙",
+                                style = MaterialTheme.typography.headlineSmall
                             )
+                        }
+                    }
+                }
+            }
+
+            // Withdrawal Method Card (Dynamic from Admin)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp)
+                ) {
+                    Text(
+                        text = "1. Select Withdrawal Method",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (withdrawalMethods.isEmpty()) {
+                        Text(
+                            text = "No withdrawal methods configured yet.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        withdrawalMethods.forEach { method ->
+                            val isSelected = selectedMethod == method
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .clickable { selectedMethod = method }
+                                    .border(
+                                        width = if (isSelected) 2.dp else 1.dp,
+                                        color = if (isSelected) PurplePrimary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                        shape = RoundedCornerShape(14.dp)
+                                    )
+                                    .testTag("withdraw_method_${method.lowercase().replace(" ", "_")}"),
+                                shape = RoundedCornerShape(14.dp),
+                                color = if (isSelected) PurplePrimary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = if (isSelected) PurplePrimary else MaterialTheme.colorScheme.surfaceVariant,
+                                        modifier = Modifier.size(38.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                Icons.Filled.AccountBalance,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(20.dp),
+                                                tint = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(12.dp))
+
+                                    Text(
+                                        text = method,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.weight(1f)
+                                    )
+
+                                    if (isSelected) {
+                                        Icon(Icons.Filled.Check, contentDescription = null, tint = PurplePrimary)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -178,7 +296,7 @@ fun WithdrawScreen(
                         .padding(18.dp)
                 ) {
                     Text(
-                        text = "Withdrawal Amount",
+                        text = "2. Enter Withdrawal Amount",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Bold
@@ -192,18 +310,18 @@ fun WithdrawScreen(
                             amountText = it.filter { ch -> ch.isDigit() || ch == '.' }
                             errorMessage = null
                         },
-                        placeholder = { Text("Enter credits to withdraw") },
+                        placeholder = { Text("0.00") },
                         prefix = {
-                            Text(text = "🪙 ", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Text(text = "🪙 ", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                         },
-                        textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        textStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("withdraw_amount_input"),
                         shape = RoundedCornerShape(14.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = PurplePrimary,
+                            focusedBorderColor = PurpleNeon,
                             unfocusedBorderColor = MaterialTheme.colorScheme.outline
                         ),
                         isError = errorMessage != null
@@ -241,7 +359,7 @@ fun WithdrawScreen(
                 }
             }
 
-            // Withdrawal Method Card
+            // User Account Details Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
@@ -254,82 +372,7 @@ fun WithdrawScreen(
                         .padding(18.dp)
                 ) {
                     Text(
-                        text = "Select Withdrawal Method",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    val withdrawalMethods = listOf(
-                        Pair("Mobile Banking", Icons.Filled.PhoneAndroid),
-                        Pair("Bank Transfer", Icons.Filled.AccountBalance)
-                    )
-
-                    withdrawalMethods.forEach { (method, icon) ->
-                        val isSelected = selectedMethod == method
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                                .clickable { selectedMethod = method }
-                                .border(
-                                    width = if (isSelected) 2.dp else 1.dp,
-                                    color = if (isSelected) PurplePrimary else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                                    shape = RoundedCornerShape(14.dp)
-                                )
-                                .testTag("withdraw_method_${method.lowercase().replace(" ", "_")}"),
-                            shape = RoundedCornerShape(14.dp),
-                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surface
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(14.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = if (isSelected) PurplePrimary else MaterialTheme.colorScheme.surfaceVariant,
-                                    modifier = Modifier.size(38.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.width(12.dp))
-
-                                Text(
-                                    text = method,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.weight(1f)
-                                )
-
-                                if (isSelected) {
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Account Details Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp)
-                ) {
-                    Text(
-                        text = "Account Information",
+                        text = "3. Your Payout Account Information",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Bold
@@ -343,14 +386,15 @@ fun WithdrawScreen(
                             accountNumber = it
                             errorMessage = null
                         },
-                        label = { Text("Account Number / Mobile Number") },
-                        placeholder = { Text(if (selectedMethod == "Mobile Banking") "+8801XXXXXXXXX" else "1234567890123") },
+                        label = { Text("Your $selectedMethod Number / Account") },
+                        placeholder = { Text("017XXXXXXXX / Account No") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("withdraw_account_input"),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = PurplePrimary
+                            focusedBorderColor = PurpleNeon
                         )
                     )
 
@@ -362,14 +406,14 @@ fun WithdrawScreen(
                             accountHolderName = it
                             errorMessage = null
                         },
-                        label = { Text("Account Holder Name / Bank Name") },
-                        placeholder = { Text("Maruf Hossain") },
+                        label = { Text("Account Holder Name (Optional)") },
+                        placeholder = { Text("Your Name") },
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("withdraw_holder_input"),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = PurplePrimary
+                            focusedBorderColor = PurpleNeon
                         )
                     )
                 }
@@ -403,7 +447,7 @@ fun WithdrawScreen(
                         return@Button
                     }
                     if (accountNumber.isBlank()) {
-                        errorMessage = "Please enter your account or mobile number."
+                        errorMessage = "Please enter your $selectedMethod account or phone number."
                         return@Button
                     }
 
@@ -411,8 +455,8 @@ fun WithdrawScreen(
                     errorMessage = null
 
                     coroutineScope.launch {
-                        delay(900)
-                        val result = repository.withdraw(amount, selectedMethod, accountNumber)
+                        delay(700)
+                        val result = repository.withdraw(amount, selectedMethod, accountNumber.trim())
                         isLoading = false
                         result.onSuccess {
                             withdrawnAmount = amount
@@ -426,10 +470,10 @@ fun WithdrawScreen(
                     .fillMaxWidth()
                     .height(54.dp)
                     .testTag("submit_withdraw_button"),
-                enabled = !isLoading,
+                enabled = !isLoading && !isWithdrawDisabled,
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = PurplePrimary,
+                    containerColor = if (isWithdrawDisabled) Color.Gray else PurplePrimary,
                     contentColor = Color.White
                 )
             ) {
@@ -447,14 +491,14 @@ fun WithdrawScreen(
                     )
                 } else {
                     Text(
-                        text = "Submit Withdrawal",
+                        text = if (isWithdrawDisabled) "Withdrawal Closed" else "Submit Withdrawal Request",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(30.dp))
         }
     }
 }

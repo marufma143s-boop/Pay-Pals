@@ -34,6 +34,7 @@ object FirebaseRealtimeDbManager {
     private val referralIndexRef get() = database.getReference("referral_codes")
     private val campaignsRef get() = database.getReference("campaigns")
     private val withdrawalsRef get() = database.getReference("withdrawals")
+    private val popupNoticeRef get() = database.getReference("popup_notice_settings")
 
     fun sanitizeKey(key: String): String {
         return key.trim().lowercase()
@@ -371,9 +372,18 @@ object FirebaseRealtimeDbManager {
         }
     }
 
-    fun pushCampaignToDb(campaignMap: Map<String, Any?>) {
+    fun pushCampaignToDb(userId: String, campaignMap: Map<String, Any?>) {
         val campaignId = campaignMap["id"] as? String ?: return
         campaignsRef.child(campaignId).setValue(campaignMap)
+        if (userId.isNotBlank()) {
+            usersRef.child(userId).child("campaigns").child(campaignId).setValue(campaignMap)
+        }
+    }
+
+    fun pushCampaignToDb(campaignMap: Map<String, Any?>) {
+        val campaignId = campaignMap["id"] as? String ?: return
+        val userId = campaignMap["userId"] as? String ?: ""
+        pushCampaignToDb(userId, campaignMap)
     }
 
     fun pushWithdrawalToDb(userId: String, withdrawalMap: Map<String, Any?>) {
@@ -409,6 +419,72 @@ object FirebaseRealtimeDbManager {
             }
         }
         usersRef.child(userId).addValueEventListener(listener)
+        return listener
+    }
+
+    fun attachUserCampaignsListener(userId: String, onDataChange: (List<Map<String, Any?>>) -> Unit): ValueEventListener? {
+        if (userId.isBlank()) return null
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val list = mutableListOf<Map<String, Any?>>()
+                for (child in snapshot.children) {
+                    val map = child.value as? Map<String, Any?>
+                    if (map != null) {
+                        list.add(map)
+                    }
+                }
+                onDataChange(list)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "attachUserCampaignsListener onCancelled: ${error.message}")
+            }
+        }
+        usersRef.child(userId).child("campaigns").addValueEventListener(listener)
+        return listener
+    }
+
+    fun attachUserReferralsListener(userId: String, onDataChange: (List<Map<String, Any?>>) -> Unit): ValueEventListener? {
+        if (userId.isBlank()) return null
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val list = mutableListOf<Map<String, Any?>>()
+                for (child in snapshot.children) {
+                    val map = child.value as? Map<String, Any?>
+                    if (map != null) {
+                        list.add(map)
+                    }
+                }
+                onDataChange(list)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "attachUserReferralsListener onCancelled: ${error.message}")
+            }
+        }
+        usersRef.child(userId).child("referrals").addValueEventListener(listener)
+        return listener
+    }
+
+    fun attachUserTransactionsListener(userId: String, onDataChange: (List<Map<String, Any?>>) -> Unit): ValueEventListener? {
+        if (userId.isBlank()) return null
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val list = mutableListOf<Map<String, Any?>>()
+                for (child in snapshot.children) {
+                    val map = child.value as? Map<String, Any?>
+                    if (map != null) {
+                        list.add(map)
+                    }
+                }
+                onDataChange(list)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "attachUserTransactionsListener onCancelled: ${error.message}")
+            }
+        }
+        usersRef.child(userId).child("transactions").addValueEventListener(listener)
         return listener
     }
 
@@ -456,11 +532,18 @@ object FirebaseRealtimeDbManager {
         usersRef.child(userId).removeValue()
     }
     
-        fun updateCampaignViews(campaignId: String, completedViews: Int, status: String) {
-        campaignsRef.child(campaignId).updateChildren(mapOf(
+    fun updateCampaignViews(campaignId: String, completedViews: Int, status: String) {
+        val updates = mapOf<String, Any?>(
             "completedViews" to completedViews,
             "status" to status
-        ))
+        )
+        campaignsRef.child(campaignId).updateChildren(updates)
+        campaignsRef.child(campaignId).child("userId").get().addOnSuccessListener { snap ->
+            val userId = snap.getValue(String::class.java)
+            if (!userId.isNullOrBlank()) {
+                usersRef.child(userId).child("campaigns").child(campaignId).updateChildren(updates)
+            }
+        }
     }
 
     fun updateCampaignStatus(campaignId: String, status: String, rejectReason: String? = null) {
@@ -469,6 +552,12 @@ object FirebaseRealtimeDbManager {
             updates["rejectReason"] = rejectReason
         }
         campaignsRef.child(campaignId).updateChildren(updates)
+        campaignsRef.child(campaignId).child("userId").get().addOnSuccessListener { snap ->
+            val userId = snap.getValue(String::class.java)
+            if (!userId.isNullOrBlank()) {
+                usersRef.child(userId).child("campaigns").child(campaignId).updateChildren(updates)
+            }
+        }
     }
     fun attachAdminDepositsListener(onDataChange: (Map<String, Any?>) -> Unit) {
         adminDepositsRef.addValueEventListener(object : ValueEventListener {
@@ -528,5 +617,272 @@ object FirebaseRealtimeDbManager {
                 }
             }
         }
+    }
+
+    private val paidPackagesRef get() = database.getReference("paid_packages")
+    private val packageOrdersRef get() = database.getReference("package_orders")
+
+    fun attachPaidPackagesListener(onDataChange: (List<Map<String, Any?>>) -> Unit): ValueEventListener {
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val list = mutableListOf<Map<String, Any?>>()
+                for (child in snapshot.children) {
+                    val map = child.value as? Map<String, Any?>
+                    if (map != null) {
+                        list.add(map)
+                    }
+                }
+                onDataChange(list)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "attachPaidPackagesListener onCancelled: ${error.message}")
+            }
+        }
+        paidPackagesRef.addValueEventListener(listener)
+        return listener
+    }
+
+    fun savePaidPackage(packageMap: Map<String, Any?>) {
+        val id = packageMap["id"] as? String ?: UUID.randomUUID().toString()
+        paidPackagesRef.child(id).setValue(packageMap)
+    }
+
+    fun deletePaidPackage(packageId: String) {
+        if (packageId.isNotBlank()) {
+            paidPackagesRef.child(packageId).removeValue()
+        }
+    }
+
+    fun pushPackageOrder(userId: String, orderMap: Map<String, Any?>) {
+        val orderId = orderMap["id"] as? String ?: return
+        packageOrdersRef.child(orderId).setValue(orderMap)
+        if (userId.isNotBlank()) {
+            usersRef.child(userId).child("package_orders").child(orderId).setValue(orderMap)
+        }
+    }
+
+    fun attachUserPackageOrdersListener(userId: String, onDataChange: (List<Map<String, Any?>>) -> Unit): ValueEventListener? {
+        if (userId.isBlank()) return null
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val list = mutableListOf<Map<String, Any?>>()
+                for (child in snapshot.children) {
+                    val map = child.value as? Map<String, Any?>
+                    if (map != null) {
+                        list.add(map)
+                    }
+                }
+                onDataChange(list)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "attachUserPackageOrdersListener onCancelled: ${error.message}")
+            }
+        }
+        usersRef.child(userId).child("package_orders").addValueEventListener(listener)
+        return listener
+    }
+
+    fun attachAdminPackageOrdersListener(onDataChange: (Map<String, Any?>) -> Unit): ValueEventListener {
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val data = snapshot.value as? Map<String, Any?> ?: emptyMap()
+                onDataChange(data)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "attachAdminPackageOrdersListener onCancelled: ${error.message}")
+            }
+        }
+        packageOrdersRef.addValueEventListener(listener)
+        return listener
+    }
+
+    fun updatePackageOrderStatus(orderId: String, status: String, rejectReason: String? = null) {
+        val updates = mutableMapOf<String, Any?>("status" to status)
+        if (rejectReason != null) {
+            updates["rejectReason"] = rejectReason
+        }
+        packageOrdersRef.child(orderId).updateChildren(updates)
+        packageOrdersRef.child(orderId).addListenerForSingleValueEvent(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val orderData = snapshot.value as? Map<String, Any?>
+                val userId = orderData?.get("userId") as? String
+                if (!userId.isNullOrBlank()) {
+                    usersRef.child(userId).child("package_orders").child(orderId).updateChildren(updates)
+                    // If rejected, refund the price to user balance
+                    if (status.equals("REJECTED", ignoreCase = true)) {
+                        val price = (orderData["price"] as? Number)?.toDouble() ?: 0.0
+                        if (price > 0.0) {
+                            usersRef.child(userId).child("balance").get().addOnSuccessListener { balSnap ->
+                                val curBal = balSnap.getValue(Double::class.java) ?: 0.0
+                                usersRef.child(userId).child("balance").setValue(curBal + price)
+                            }
+                        }
+                    }
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {}
+        })
+    }
+
+    private val developerInfoRef get() = database.getReference("app_settings/developer_info")
+    private val supportThreadsRef get() = database.getReference("support_threads")
+    private val supportMessagesRef get() = database.getReference("support_messages")
+
+    fun saveDeveloperInfo(data: Map<String, Any?>) {
+        developerInfoRef.setValue(data)
+    }
+
+    fun attachDeveloperInfoListener(onDataChange: (Map<String, Any?>) -> Unit): ValueEventListener {
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val data = snapshot.value as? Map<String, Any?> ?: emptyMap()
+                onDataChange(data)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "attachDeveloperInfoListener onCancelled: ${error.message}")
+            }
+        }
+        developerInfoRef.addValueEventListener(listener)
+        return listener
+    }
+
+    fun updateUserAvatar(userId: String, avatarBase64: String) {
+        val updates = mapOf<String, Any?>("avatarBase64" to avatarBase64)
+        usersRef.child(userId).updateChildren(updates)
+    }
+
+    fun sendSupportMessage(
+        userId: String,
+        messageId: String,
+        messageData: Map<String, Any?>,
+        threadSummary: Map<String, Any?>
+    ) {
+        supportMessagesRef.child(userId).child(messageId).setValue(messageData)
+        supportThreadsRef.child(userId).updateChildren(threadSummary)
+    }
+
+    fun deleteSupportMessage(userId: String, messageId: String) {
+        supportMessagesRef.child(userId).child(messageId).child("isDeleted").setValue(true)
+    }
+
+    fun attachUserSupportMessagesListener(
+        userId: String,
+        onDataChange: (Map<String, Any?>) -> Unit
+    ): ValueEventListener {
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val data = snapshot.value as? Map<String, Any?> ?: emptyMap()
+                onDataChange(data)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "attachUserSupportMessagesListener onCancelled: ${error.message}")
+            }
+        }
+        supportMessagesRef.child(userId).addValueEventListener(listener)
+        return listener
+    }
+
+    fun attachAllSupportThreadsListener(
+        onDataChange: (Map<String, Any?>) -> Unit
+    ): ValueEventListener {
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val data = snapshot.value as? Map<String, Any?> ?: emptyMap()
+                onDataChange(data)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "attachAllSupportThreadsListener onCancelled: ${error.message}")
+            }
+        }
+        supportThreadsRef.addValueEventListener(listener)
+        return listener
+    }
+
+    fun updateUserRole(userId: String, role: String) {
+        val updates = mapOf<String, Any?>(
+            "role" to role
+        )
+        database.reference.child("users").child(userId).updateChildren(updates)
+    }
+
+    fun updateUserAdminPermissions(userId: String, permissions: Map<String, Boolean>) {
+        database.reference.child("users").child(userId).child("permissions").setValue(permissions)
+    }
+
+    private val serviceControlRef get() = database.getReference("app_settings/service_control")
+    private val maintenanceRef get() = database.getReference("app_settings/maintenance")
+
+    fun saveServiceControlSettings(data: Map<String, Any?>) {
+        serviceControlRef.setValue(data)
+    }
+
+    fun updateSingleService(serviceKey: String, isDisabled: Boolean, reason: String) {
+        serviceControlRef.child(serviceKey).setValue(
+            mapOf(
+                "key" to serviceKey,
+                "isDisabled" to isDisabled,
+                "reason" to reason
+            )
+        )
+    }
+
+    fun attachServiceControlListener(onDataChange: (Map<String, Any?>) -> Unit): ValueEventListener {
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val data = snapshot.value as? Map<String, Any?> ?: emptyMap()
+                onDataChange(data)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "attachServiceControlListener onCancelled: ${error.message}")
+            }
+        }
+        serviceControlRef.addValueEventListener(listener)
+        return listener
+    }
+
+    fun saveMaintenanceSettings(data: Map<String, Any?>) {
+        maintenanceRef.setValue(data)
+    }
+
+    fun attachMaintenanceListener(onDataChange: (Map<String, Any?>) -> Unit): ValueEventListener {
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val data = snapshot.value as? Map<String, Any?> ?: emptyMap()
+                onDataChange(data)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "attachMaintenanceListener onCancelled: ${error.message}")
+            }
+        }
+        maintenanceRef.addValueEventListener(listener)
+        return listener
+    }
+
+    fun savePopupNoticeSettings(data: Map<String, Any?>) {
+        popupNoticeRef.setValue(data)
+    }
+
+    fun attachPopupNoticeListener(onDataChange: (Map<String, Any?>) -> Unit): ValueEventListener {
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val data = snapshot.value as? Map<String, Any?> ?: emptyMap()
+                onDataChange(data)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "attachPopupNoticeListener onCancelled: ${error.message}")
+            }
+        }
+        popupNoticeRef.addValueEventListener(listener)
+        return listener
     }
 }

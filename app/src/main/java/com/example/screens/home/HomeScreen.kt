@@ -23,6 +23,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -33,6 +36,7 @@ import com.example.components.MainAppHeader
 import com.example.components.ReferralCampaignPromoBanner
 import com.example.components.ReferralCard
 import com.example.components.SectionHeader
+import com.example.components.ServiceDisabledDialog
 import com.example.components.TransactionCard
 import com.example.components.WalletCard
 import com.example.components.WalletQuickActionButtons
@@ -70,7 +74,16 @@ fun HomeScreen(
     val referrals by repository.referrals.collectAsState()
     val totalCampaignCount by repository.totalCampaignCount.collectAsState()
     val totalReferralCount by repository.totalReferralCount.collectAsState()
+    val onlineUsersMin by repository.onlineUsersMin.collectAsState()
+    val onlineUsersMax by repository.onlineUsersMax.collectAsState()
     val isDarkMode by repository.isDarkMode.collectAsState()
+    val serviceSettings by repository.serviceControlSettings.collectAsState()
+
+    var disabledServiceDialogInfo by remember { mutableStateOf<Pair<String, String>?>(null) }
+
+    val isDepositDisabled = serviceSettings.isServiceDisabled("deposit")
+    val isWithdrawDisabled = serviceSettings.isServiceDisabled("withdraw")
+    val isReferralDisabled = serviceSettings.isServiceDisabled("referral")
 
     // 5 Recent Items
     val recentTransactions = transactions.take(5)
@@ -105,19 +118,34 @@ fun HomeScreen(
             
             // Online Users Card
             item {
-                OnlineUsersCard()
+                OnlineUsersCard(
+                    minUsers = onlineUsersMin,
+                    maxUsers = onlineUsersMax
+                )
             }
 
             // 2. Separate Action Button Cards Below Wallet
             item {
                 WalletQuickActionButtons(
-                    onDepositClick = onNavigateToDeposit,
-                    onWithdrawClick = onNavigateToWithdraw,
-                    onHistoryClick = onNavigateToTransactions
+                    onDepositClick = {
+                        if (isDepositDisabled) {
+                            disabledServiceDialogInfo = Pair("ডিপোজিট সার্ভিস (Deposit)", serviceSettings.getServiceReason("deposit"))
+                        } else {
+                            onNavigateToDeposit()
+                        }
+                    },
+                    onWithdrawClick = {
+                        if (isWithdrawDisabled) {
+                            disabledServiceDialogInfo = Pair("উইথড্রয়াল সার্ভিস (Withdrawal)", serviceSettings.getServiceReason("withdraw"))
+                        } else {
+                            onNavigateToWithdraw()
+                        }
+                    },
+                    onHistoryClick = onNavigateToTransactions,
+                    isDepositDisabled = isDepositDisabled,
+                    isWithdrawDisabled = isWithdrawDisabled
                 )
             }
-            
-
 
             // 3. Statistics Grid (4 Cards, 2 per row)
             item {
@@ -144,11 +172,17 @@ fun HomeScreen(
                         AppStatCard(
                             title = "Total Referrals",
                             value = "$totalReferralCount",
-                            supportingText = "Network Members",
+                            supportingText = if (isReferralDisabled) "Closed" else "Network Members",
                             icon = Icons.Outlined.People,
-                            accentColor = InfoBlue,
+                            accentColor = if (isReferralDisabled) Color.Gray else InfoBlue,
                             modifier = Modifier.weight(1f),
-                            onClick = onNavigateToRefer
+                            onClick = {
+                                if (isReferralDisabled) {
+                                    disabledServiceDialogInfo = Pair("রেফারেল সিস্টেম (Referral)", serviceSettings.getServiceReason("referral"))
+                                } else {
+                                    onNavigateToRefer()
+                                }
+                            }
                         )
                     }
 
@@ -160,22 +194,34 @@ fun HomeScreen(
                         AppStatCard(
                             title = "Total Deposit",
                             value = FormatUtils.formatCredits(walletState.totalDeposit),
-                            supportingText = "All Time Deposits",
+                            supportingText = if (isDepositDisabled) "Closed" else "All Time Deposits",
                             icon = Icons.Filled.ArrowDownward,
-                            accentColor = SuccessGreen,
+                            accentColor = if (isDepositDisabled) Color.Gray else SuccessGreen,
                             modifier = Modifier.weight(1f),
-                            onClick = onNavigateToDeposit
+                            onClick = {
+                                if (isDepositDisabled) {
+                                    disabledServiceDialogInfo = Pair("ডিপোজিট সার্ভিস (Deposit)", serviceSettings.getServiceReason("deposit"))
+                                } else {
+                                    onNavigateToDeposit()
+                                }
+                            }
                         )
 
                         // Total Withdrawal
                         AppStatCard(
                             title = "Total Withdrawal",
                             value = FormatUtils.formatCredits(walletState.totalWithdrawal),
-                            supportingText = "Processed Payouts",
+                            supportingText = if (isWithdrawDisabled) "Closed" else "Processed Payouts",
                             icon = Icons.Filled.ArrowUpward,
-                            accentColor = WarningOrange,
+                            accentColor = if (isWithdrawDisabled) Color.Gray else WarningOrange,
                             modifier = Modifier.weight(1f),
-                            onClick = onNavigateToWithdraw
+                            onClick = {
+                                if (isWithdrawDisabled) {
+                                    disabledServiceDialogInfo = Pair("উইথড্রয়াল সার্ভিস (Withdrawal)", serviceSettings.getServiceReason("withdraw"))
+                                } else {
+                                    onNavigateToWithdraw()
+                                }
+                            }
                         )
                     }
                 }
@@ -184,7 +230,13 @@ fun HomeScreen(
             // 4. Referral & Campaign Promotion Banner Card
             item {
                 ReferralCampaignPromoBanner(
-                    onReferClick = onNavigateToRefer
+                    onReferClick = {
+                        if (isReferralDisabled) {
+                            disabledServiceDialogInfo = Pair("রেফারেল সিস্টেম (Referral)", serviceSettings.getServiceReason("referral"))
+                        } else {
+                            onNavigateToRefer()
+                        }
+                    }
                 )
             }
 
@@ -192,30 +244,56 @@ fun HomeScreen(
             item {
                 SectionHeader(
                     title = "Recent Transactions",
-                    actionText = "View All",
+                    actionText = if (recentTransactions.isNotEmpty()) "View All" else null,
                     onActionClick = onNavigateToTransactions
                 )
             }
 
-            items(recentTransactions, key = { it.id }) { txn ->
-                TransactionCard(
-                    transaction = txn,
-                    onClick = onNavigateToTransactions
-                )
+            if (recentTransactions.isEmpty()) {
+                item {
+                    com.example.components.EmptyStateView(
+                        icon = Icons.Filled.ArrowDownward,
+                        title = "No Transactions",
+                        message = "Your recent deposit, withdrawal, and reward history will appear here."
+                    )
+                }
+            } else {
+                items(recentTransactions, key = { it.id }) { txn ->
+                    TransactionCard(
+                        transaction = txn,
+                        onClick = onNavigateToTransactions
+                    )
+                }
             }
 
-            // 5. Recent Referrals (Exactly 5)
+            // 6. Recent Referrals (Exactly 5)
             item {
                 Spacer(modifier = Modifier.height(4.dp))
                 SectionHeader(
                     title = "Recent Referrals",
-                    actionText = "View All",
-                    onActionClick = onNavigateToRefer
+                    actionText = if (recentReferrals.isNotEmpty()) "View All" else null,
+                    onActionClick = {
+                        if (isReferralDisabled) {
+                            disabledServiceDialogInfo = Pair("রেফারেল সিস্টেম (Referral)", serviceSettings.getServiceReason("referral"))
+                        } else {
+                            onNavigateToRefer()
+                        }
+                    }
                 )
             }
 
-            items(recentReferrals, key = { it.id }) { referral ->
-                ReferralCard(referral = referral)
+            if (recentReferrals.isEmpty()) {
+                item {
+                    com.example.components.EmptyStateView(
+                        icon = Icons.Outlined.People,
+                        title = "No Referrals Yet",
+                        message = "Invite friends with your referral code to earn bonuses together!"
+                    )
+                }
+            } else {
+                items(recentReferrals, key = { it.id }) { referral ->
+                    ReferralCard(referral = referral)
+                }
             }
 
             // Bottom padding for scroll above floating bar
@@ -223,5 +301,15 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.height(80.dp))
             }
         }
+    }
+
+    // Modal dialog when user taps a disabled service
+    if (disabledServiceDialogInfo != null) {
+        val (title, reason) = disabledServiceDialogInfo!!
+        ServiceDisabledDialog(
+            serviceTitle = title,
+            reason = reason,
+            onDismiss = { disabledServiceDialogInfo = null }
+        )
     }
 }

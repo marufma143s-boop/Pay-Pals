@@ -33,6 +33,10 @@ object FormatUtils {
         return integerFormat.format(count)
     }
 
+    fun formatNumber(number: Number): String {
+        return integerFormat.format(number)
+    }
+
     fun isValidUrl(url: String): Boolean {
         if (url.isBlank()) return false
         val trimmed = url.trim()

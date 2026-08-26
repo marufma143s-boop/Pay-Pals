@@ -1,6 +1,7 @@
 package com.example.screens.account
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,8 +22,9 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.HeadsetMic
-import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.outlined.Chat
 import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -49,19 +51,23 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.components.SectionHeader
 import com.example.components.SubScreenTopBar
 import com.example.components.SuccessDialogView
 import com.example.repository.AppRepository
+import com.example.screens.support.LiveChatScreen
 import com.example.ui.theme.ErrorRed
 import com.example.ui.theme.InfoBlue
 import com.example.ui.theme.PurpleNeon
 import com.example.ui.theme.PurplePrimary
 import com.example.ui.theme.SuccessGreen
+import com.example.ui.theme.WalletGradientBrush
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -73,6 +79,18 @@ fun SupportCenterScreen(
     modifier: Modifier = Modifier
 ) {
     val userProfile by repository.userProfile.collectAsState()
+    var isLiveChatOpen by remember { mutableStateOf(false) }
+
+    if (isLiveChatOpen) {
+        LiveChatScreen(
+            repository = repository,
+            targetUserId = userProfile.id,
+            targetUserName = "PayPulse 24/7 Support",
+            isAdminView = false,
+            onBackClick = { isLiveChatOpen = false }
+        )
+        return
+    }
 
     val categories = listOf("Wallet & Payment", "Campaign Promotion", "Task & Rewards", "Referral System", "Account Security", "Other")
     var selectedCategory by remember { mutableStateOf(categories[0]) }
@@ -123,6 +141,104 @@ fun SupportCenterScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Hero: Live Support Chat Banner
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(4.dp, RoundedCornerShape(20.dp), spotColor = PurplePrimary)
+                        .clickable { isLiveChatOpen = true }
+                        .testTag("open_live_support_banner"),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(WalletGradientBrush)
+                            .padding(20.dp)
+                    ) {
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color.White.copy(alpha = 0.25f),
+                                        modifier = Modifier.size(44.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Default.HeadsetMic,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            text = "24/7 Live Support Chat",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                        Text(
+                                            text = "Instant Text & Voice messaging",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = PurpleNeon,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color.White
+                                ) {
+                                    Text(
+                                        text = "LIVE",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = PurplePrimary,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            Text(
+                                text = "Speak directly with our technical support team in real-time. Send text messages or audio voice notes with permanent chat history.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.9f),
+                                lineHeight = 18.sp
+                            )
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            Button(
+                                onClick = { isLiveChatOpen = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color.White,
+                                    contentColor = PurplePrimary
+                                )
+                            ) {
+                                Icon(Icons.Outlined.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Open Live Chat & Voice", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+
             // 1. Direct Contact Cards
             item {
                 Row(
@@ -162,12 +278,12 @@ fun SupportCenterScreen(
                                 modifier = Modifier.size(36.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Filled.HeadsetMic, contentDescription = "Live Help", tint = InfoBlue, modifier = Modifier.size(18.dp))
+                                    Icon(Icons.Filled.Mic, contentDescription = "Voice Support", tint = InfoBlue, modifier = Modifier.size(18.dp))
                                 }
                             }
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text("Live Assistance", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                            Text("24/7 Agent Help", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Voice Support", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            Text("Voice Notes Active", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }

@@ -9,7 +9,8 @@ sealed class Screen(val route: String) {
     object Home : Screen("home")
     object Refer : Screen("refer")
     object CreateCampaign : Screen("create_campaign")
-    object Tasks : Screen("tasks")
+    object Packages : Screen("packages")
+    object Tasks : Screen("packages")
     object MyAccount : Screen("account")
 
     // Sub Screens
@@ -27,6 +28,7 @@ sealed class Screen(val route: String) {
     object PrivacyPolicy : Screen("privacy_policy")
     object AboutUs : Screen("about_us")
     object DeveloperProfile : Screen("developer_profile")
+    object LiveSupport : Screen("live_support")
     object Adstra : Screen("adstra")
     object Blogger : Screen("blogger")
     object VisitEarn : Screen("visit_earn")

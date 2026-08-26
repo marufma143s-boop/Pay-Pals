@@ -1,56 +1,27 @@
 package com.example.screens.account
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.Save
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.R
@@ -60,6 +31,8 @@ import com.example.ui.theme.ErrorRed
 import com.example.ui.theme.PurpleNeon
 import com.example.ui.theme.PurplePrimary
 import com.example.ui.theme.SuccessGreen
+import com.example.utils.Base64OrResourceImage
+import com.example.utils.ImageUtils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -70,6 +43,7 @@ fun AccountDetailsScreen(
     modifier: Modifier = Modifier
 ) {
     val userProfile by repository.userProfile.collectAsState()
+    val context = LocalContext.current
 
     var isEditMode by remember { mutableStateOf(false) }
     var fullNameInput by remember(userProfile.fullName) { mutableStateOf(userProfile.fullName) }
@@ -81,6 +55,20 @@ fun AccountDetailsScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val coroutineScope = rememberCoroutineScope()
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val base64 = ImageUtils.uriToBase64(context, uri, maxDimension = 360, quality = 80)
+            if (base64 != null) {
+                repository.updateUserAvatar(base64)
+                successMessage = "Profile picture updated successfully!"
+            } else {
+                errorMessage = "Failed to process selected image."
+            }
+        }
+    }
 
     Column(
         modifier = modifier
@@ -112,22 +100,66 @@ fun AccountDetailsScreen(
                         .padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Surface(
-                        shape = CircleShape,
-                        modifier = Modifier
-                            .size(84.dp)
-                            .border(3.dp, PurplePrimary, CircleShape),
-                        color = PurplePrimary.copy(alpha = 0.1f)
+                    Box(
+                        contentAlignment = Alignment.BottomEnd,
+                        modifier = Modifier.size(96.dp)
                     ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.img_avatar_maruf_1787554123074),
-                            contentDescription = "Profile Picture",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.clip(CircleShape)
-                        )
+                        Surface(
+                            shape = CircleShape,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .border(3.dp, PurplePrimary, CircleShape)
+                                .clickable { photoPickerLauncher.launch("image/*") },
+                            color = PurplePrimary.copy(alpha = 0.1f)
+                        ) {
+                            Base64OrResourceImage(
+                                base64Str = userProfile.avatarBase64,
+                                placeholderRes = R.drawable.img_avatar_maruf_1787554123074,
+                                contentDescription = "Profile Picture",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(CircleShape)
+                            )
+                        }
+
+                        // Floating camera edit icon badge
+                        Surface(
+                            shape = CircleShape,
+                            color = PurplePrimary,
+                            shadowElevation = 4.dp,
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clickable { photoPickerLauncher.launch("image/*") }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.CameraAlt,
+                                    contentDescription = "Change Profile Picture",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    TextButton(onClick = { photoPickerLauncher.launch("image/*") }) {
+                        Icon(
+                            imageVector = Icons.Default.PhotoCamera,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = PurpleNeon
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Change Profile Picture",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = PurpleNeon,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
 
                     Text(
                         text = userProfile.fullName,
@@ -310,10 +342,10 @@ fun AccountDetailsScreen(
                                         val result = repository.updateProfile(fullNameInput, emailInput, phoneInput)
                                         isSaving = false
                                         result.onSuccess {
-                                            isEditMode = false
-                                            successMessage = "Profile updated successfully."
+                                             isEditMode = false
+                                             successMessage = "Profile updated successfully."
                                         }.onFailure { ex ->
-                                            errorMessage = ex.message ?: "Failed to update profile."
+                                             errorMessage = ex.message ?: "Failed to update profile."
                                         }
                                     }
                                 },

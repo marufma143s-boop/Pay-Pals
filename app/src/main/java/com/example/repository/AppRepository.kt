@@ -2,21 +2,7 @@ package com.example.repository
 
 import android.content.Context
 import com.example.data.DemoDataProvider
-import com.example.model.Campaign
-import com.example.model.CampaignPackage
-import com.example.model.CampaignStatus
-import com.example.model.PaymentMethod
-import com.example.model.ReferralStatus
-import com.example.model.ReferralUser
-import com.example.model.SupportCategory
-import com.example.model.SupportTicket
-import com.example.model.TaskItem
-import com.example.model.Transaction
-import com.example.model.TransactionStatus
-import com.example.model.TransactionType
-import com.example.model.UserProfile
-import com.example.model.WalletState
-import com.example.model.WithdrawalRecord
+import com.example.model.*
 import com.example.utils.FormatUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -171,35 +157,35 @@ class AppRepository private constructor(context: Context) {
         return Result.success(rewardAmount)
     }
 
-    private val _userProfile = MutableStateFlow(DemoDataProvider.getInitialUser())
+    private val _userProfile = MutableStateFlow(UserProfile(isLoggedIn = false))
     val userProfile: StateFlow<UserProfile> = _userProfile.asStateFlow()
 
-    private val _walletState = MutableStateFlow(DemoDataProvider.getInitialWallet())
+    private val _walletState = MutableStateFlow(WalletState(balance = 0.0, totalDeposit = 0.0, totalWithdrawal = 0.0, totalReferralEarnings = 0.0, isBalanceVisible = true))
     val walletState: StateFlow<WalletState> = _walletState.asStateFlow()
 
-    private val _transactions = MutableStateFlow(DemoDataProvider.getInitialTransactions())
+    private val _transactions = MutableStateFlow<List<Transaction>>(emptyList())
     val transactions: StateFlow<List<Transaction>> = _transactions.asStateFlow()
 
-    private val _campaigns = MutableStateFlow(DemoDataProvider.getInitialCampaigns())
+    private val _campaigns = MutableStateFlow<List<Campaign>>(emptyList())
     val campaigns: StateFlow<List<Campaign>> = _campaigns.asStateFlow()
 
-    private val _referrals = MutableStateFlow(DemoDataProvider.getInitialReferrals())
+    private val _referrals = MutableStateFlow<List<ReferralUser>>(emptyList())
     val referrals: StateFlow<List<ReferralUser>> = _referrals.asStateFlow()
 
     private val _tasks = MutableStateFlow(DemoDataProvider.getInitialTasks())
     val tasks: StateFlow<List<TaskItem>> = _tasks.asStateFlow()
 
-    private val _withdrawals = MutableStateFlow(DemoDataProvider.getInitialWithdrawals())
+    private val _withdrawals = MutableStateFlow<List<WithdrawalRecord>>(emptyList())
     val withdrawals: StateFlow<List<WithdrawalRecord>> = _withdrawals.asStateFlow()
 
-    private val _dailyTaskProgress = MutableStateFlow(12)
+    private val _dailyTaskProgress = MutableStateFlow(0)
     val dailyTaskProgress: StateFlow<Int> = _dailyTaskProgress.asStateFlow()
     val dailyTaskLimit: Int = 50
 
-    private val _totalCampaignCount = MutableStateFlow(24)
+    private val _totalCampaignCount = MutableStateFlow(0)
     val totalCampaignCount: StateFlow<Int> = _totalCampaignCount.asStateFlow()
 
-    private val _totalReferralCount = MutableStateFlow(156)
+    private val _totalReferralCount = MutableStateFlow(0)
     val totalReferralCount: StateFlow<Int> = _totalReferralCount.asStateFlow()
 
     private val _supportTickets = MutableStateFlow<List<SupportTicket>>(emptyList())
@@ -216,10 +202,16 @@ class AppRepository private constructor(context: Context) {
     ))
     val campaignRates: StateFlow<Map<String, Int>> = _campaignRates.asStateFlow()
     
-    private val _depositMethods = MutableStateFlow(listOf("bKash", "Nagad", "Rocket", "Binance Pay"))
-    val depositMethods: StateFlow<List<String>> = _depositMethods.asStateFlow()
+    private val _depositMethods = MutableStateFlow<List<DepositMethodItem>>(
+        listOf(
+            DepositMethodItem(name = "bKash (Personal)", number = "01700000000", instructions = "Send Money to this personal number"),
+            DepositMethodItem(name = "Nagad (Personal)", number = "01800000000", instructions = "Send Money to this personal number"),
+            DepositMethodItem(name = "Rocket (Personal)", number = "01900000000", instructions = "Send Money to this personal number")
+        )
+    )
+    val depositMethods: StateFlow<List<DepositMethodItem>> = _depositMethods.asStateFlow()
     
-    private val _withdrawalMethods = MutableStateFlow(listOf("bKash", "Nagad", "Binance USDT"))
+    private val _withdrawalMethods = MutableStateFlow(listOf("bKash", "Nagad", "Rocket", "Binance USDT"))
     val withdrawalMethods: StateFlow<List<String>> = _withdrawalMethods.asStateFlow()
 
     private val _adminDepositRequests = MutableStateFlow<List<Map<String, Any?>>>(emptyList())
@@ -240,6 +232,39 @@ class AppRepository private constructor(context: Context) {
     private val _preferredBrowser = MutableStateFlow(prefs.getString("preferred_browser", "chrome") ?: "chrome")
     val preferredBrowser: StateFlow<String> = _preferredBrowser.asStateFlow()
 
+    private val _onlineUsersMin = MutableStateFlow(prefs.getInt("online_users_min", 50))
+    val onlineUsersMin: StateFlow<Int> = _onlineUsersMin.asStateFlow()
+
+    private val _onlineUsersMax = MutableStateFlow(prefs.getInt("online_users_max", 1000))
+    val onlineUsersMax: StateFlow<Int> = _onlineUsersMax.asStateFlow()
+
+    private val _paidPackages = MutableStateFlow<List<PaidPackage>>(getDefaultPaidPackages())
+    val paidPackages: StateFlow<List<PaidPackage>> = _paidPackages.asStateFlow()
+
+    private val _userPackageOrders = MutableStateFlow<List<PackageOrder>>(emptyList())
+    val userPackageOrders: StateFlow<List<PackageOrder>> = _userPackageOrders.asStateFlow()
+
+    private val _adminPackageOrders = MutableStateFlow<List<PackageOrder>>(emptyList())
+    val adminPackageOrders: StateFlow<List<PackageOrder>> = _adminPackageOrders.asStateFlow()
+
+    private val _developerInfo = MutableStateFlow(DeveloperInfo())
+    val developerInfo: StateFlow<DeveloperInfo> = _developerInfo.asStateFlow()
+
+    private val _allSupportThreads = MutableStateFlow<List<SupportThread>>(emptyList())
+    val allSupportThreads: StateFlow<List<SupportThread>> = _allSupportThreads.asStateFlow()
+
+    private val _currentChatMessages = MutableStateFlow<List<SupportChatMessage>>(emptyList())
+    val currentChatMessages: StateFlow<List<SupportChatMessage>> = _currentChatMessages.asStateFlow()
+
+    private val _serviceControlSettings = MutableStateFlow(ServiceControlSettings())
+    val serviceControlSettings: StateFlow<ServiceControlSettings> = _serviceControlSettings.asStateFlow()
+
+    private val _maintenanceSettings = MutableStateFlow(MaintenanceSettings())
+    val maintenanceSettings: StateFlow<MaintenanceSettings> = _maintenanceSettings.asStateFlow()
+
+    private var activeChatListener: com.google.firebase.database.ValueEventListener? = null
+    private var activeChatUserId: String? = null
+
     init {
         loadSavedSession()
         listenToAdminSettings()
@@ -259,14 +284,53 @@ class AppRepository private constructor(context: Context) {
                 _campaignRates.value = rates.mapValues { (it.value as? Number)?.toInt() ?: 1000 }
             }
             
-            val depMethods = adminData["deposit_methods"] as? List<String>
-            if (depMethods != null) {
-                _depositMethods.value = depMethods
+            val depMethodsRaw = adminData["deposit_methods"]
+            if (depMethodsRaw is List<*>) {
+                val parsedList = depMethodsRaw.mapNotNull { item ->
+                    when (item) {
+                        is Map<*, *> -> {
+                            val name = item["name"] as? String ?: ""
+                            val number = item["number"] as? String ?: ""
+                            val instructions = item["instructions"] as? String ?: ""
+                            if (name.isNotBlank()) DepositMethodItem(name, number, instructions) else null
+                        }
+                        is String -> {
+                            if (item.isNotBlank()) DepositMethodItem(name = item, number = "") else null
+                        }
+                        else -> null
+                    }
+                }
+                if (parsedList.isNotEmpty()) {
+                    _depositMethods.value = parsedList
+                }
+            } else if (depMethodsRaw is Map<*, *>) {
+                val parsedList = depMethodsRaw.values.mapNotNull { item ->
+                    if (item is Map<*, *>) {
+                        val name = item["name"] as? String ?: ""
+                        val number = item["number"] as? String ?: ""
+                        val instructions = item["instructions"] as? String ?: ""
+                        if (name.isNotBlank()) DepositMethodItem(name, number, instructions) else null
+                    } else null
+                }
+                if (parsedList.isNotEmpty()) {
+                    _depositMethods.value = parsedList
+                }
             }
             
             val withMethods = adminData["withdrawal_methods"] as? List<String>
             if (withMethods != null) {
                 _withdrawalMethods.value = withMethods
+            }
+
+            val minUsers = (adminData["online_users_min"] as? Number)?.toInt()
+            val maxUsers = (adminData["online_users_max"] as? Number)?.toInt()
+            if (minUsers != null && minUsers > 0) {
+                _onlineUsersMin.value = minUsers
+                prefs.edit().putInt("online_users_min", minUsers).apply()
+            }
+            if (maxUsers != null && maxUsers > 0) {
+                _onlineUsersMax.value = maxUsers
+                prefs.edit().putInt("online_users_max", maxUsers).apply()
             }
         }
         
@@ -285,6 +349,404 @@ class AppRepository private constructor(context: Context) {
         com.example.data.FirebaseRealtimeDbManager.attachAdminCampaignsListener { campaignsMap ->
             _allCampaigns.value = campaignsMap.values.filterIsInstance<Map<String, Any?>>().toList()
         }
+
+        com.example.data.FirebaseRealtimeDbManager.attachPaidPackagesListener { list ->
+            val parsed = list.mapNotNull { parsePaidPackage(it) }
+            if (parsed.isNotEmpty()) {
+                _paidPackages.value = parsed
+            } else {
+                // If cloud database is empty, seed default packages to Firebase
+                val defaults = getDefaultPaidPackages()
+                _paidPackages.value = defaults
+                defaults.forEach { pkg ->
+                    val map = mapOf(
+                        "id" to pkg.id,
+                        "name" to pkg.name,
+                        "views" to pkg.views,
+                        "price" to pkg.price,
+                        "description" to pkg.description,
+                        "badge" to pkg.badge,
+                        "isEnabled" to pkg.isEnabled
+                    )
+                    com.example.data.FirebaseRealtimeDbManager.savePaidPackage(map)
+                }
+            }
+        }
+
+        com.example.data.FirebaseRealtimeDbManager.attachAdminPackageOrdersListener { ordersMap ->
+            val parsedList = ordersMap.values.filterIsInstance<Map<String, Any?>>().mapNotNull { parsePackageOrder(it) }.sortedByDescending { it.timestamp }
+            _adminPackageOrders.value = parsedList
+        }
+
+        com.example.data.FirebaseRealtimeDbManager.attachDeveloperInfoListener { devMap ->
+            if (devMap.isNotEmpty()) {
+                val info = DeveloperInfo(
+                    name = devMap["name"] as? String ?: "Maruf Hossain",
+                    title = devMap["title"] as? String ?: "Lead Android & Fintech Architect",
+                    email = devMap["email"] as? String ?: "maruf.hossain.dev@gmail.com",
+                    phone = devMap["phone"] as? String ?: "+880 1712-345678",
+                    website = devMap["website"] as? String ?: "https://github.com/maruf-dev",
+                    description = devMap["description"] as? String ?: _developerInfo.value.description,
+                    avatarBase64 = devMap["avatarBase64"] as? String ?: ""
+                )
+                _developerInfo.value = info
+            }
+        }
+
+        com.example.data.FirebaseRealtimeDbManager.attachAllSupportThreadsListener { threadsMap ->
+            val list = threadsMap.values.filterIsInstance<Map<String, Any?>>().mapNotNull { map ->
+                val userId = map["userId"] as? String ?: return@mapNotNull null
+                val userName = map["userName"] as? String ?: "User"
+                val userEmail = map["userEmail"] as? String ?: ""
+                val userPhone = map["userPhone"] as? String ?: ""
+                val userAvatar = map["userAvatar"] as? String ?: ""
+                val lastMessage = map["lastMessage"] as? String ?: ""
+                val lastTimestamp = (map["lastTimestamp"] as? Number)?.toLong() ?: 0L
+                val unreadAdmin = (map["unreadAdminCount"] as? Number)?.toInt() ?: 0
+                val unreadUser = (map["unreadUserCount"] as? Number)?.toInt() ?: 0
+                SupportThread(
+                    userId = userId,
+                    userName = userName,
+                    userEmail = userEmail,
+                    userPhone = userPhone,
+                    userAvatar = userAvatar,
+                    lastMessage = lastMessage,
+                    lastTimestamp = lastTimestamp,
+                    unreadAdminCount = unreadAdmin,
+                    unreadUserCount = unreadUser
+                )
+            }.sortedByDescending { it.lastTimestamp }
+            _allSupportThreads.value = list
+        }
+
+        com.example.data.FirebaseRealtimeDbManager.attachServiceControlListener { sData ->
+            if (sData.isNotEmpty()) {
+                val deposit = parseServiceItem(sData["deposit"] as? Map<*, *>, "deposit", "Deposit Service")
+                val withdraw = parseServiceItem(sData["withdraw"] as? Map<*, *>, "withdraw", "Withdrawal Service")
+                val adsterra = parseServiceItem(sData["campaign_adsterra"] as? Map<*, *>, "campaign_adsterra", "Adsterra Campaigns & Tasks")
+                val blogger = parseServiceItem(sData["campaign_blogger"] as? Map<*, *>, "campaign_blogger", "Blogger Campaigns & Tasks")
+                val monetag = parseServiceItem(sData["campaign_monetag"] as? Map<*, *>, "campaign_monetag", "Monetag Campaigns & Tasks")
+                val referral = parseServiceItem(sData["referral"] as? Map<*, *>, "referral", "Referral System")
+                val paidPackages = parseServiceItem(sData["paid_packages"] as? Map<*, *>, "paid_packages", "Paid Campaign Packages")
+                val registration = parseServiceItem(sData["user_registration"] as? Map<*, *>, "user_registration", "New User Registration")
+
+                _serviceControlSettings.value = ServiceControlSettings(
+                    deposit = deposit,
+                    withdraw = withdraw,
+                    campaignAdsterra = adsterra,
+                    campaignBlogger = blogger,
+                    campaignMonetag = monetag,
+                    referral = referral,
+                    paidPackages = paidPackages,
+                    userRegistration = registration
+                )
+            }
+        }
+
+        com.example.data.FirebaseRealtimeDbManager.attachMaintenanceListener { mData ->
+            if (mData.isNotEmpty()) {
+                val isMaster = mData["isMasterEnabled"] as? Boolean ?: false
+                val isUser = mData["isUserMaintenance"] as? Boolean ?: false
+                val userNote = mData["userNote"] as? String ?: ""
+                val isAdmin = mData["isAdminMaintenance"] as? Boolean ?: false
+                val adminNote = mData["adminNote"] as? String ?: ""
+
+                val linksRaw = mData["socialLinks"]
+                val linksList = mutableListOf<SocialMediaLink>()
+                if (linksRaw is List<*>) {
+                    linksRaw.forEach { item ->
+                        if (item is Map<*, *>) {
+                            parseSocialMediaLink(item)?.let { linksList.add(it) }
+                        }
+                    }
+                } else if (linksRaw is Map<*, *>) {
+                    linksRaw.values.forEach { item ->
+                        if (item is Map<*, *>) {
+                            parseSocialMediaLink(item)?.let { linksList.add(it) }
+                        }
+                    }
+                }
+
+                _maintenanceSettings.value = MaintenanceSettings(
+                    isMasterEnabled = isMaster,
+                    isUserMaintenance = isUser,
+                    userNote = userNote,
+                    isAdminMaintenance = isAdmin,
+                    adminNote = adminNote,
+                    socialLinks = linksList
+                )
+            }
+        }
+    }
+
+    private fun parseServiceItem(map: Map<*, *>?, defaultKey: String, defaultName: String): ServiceItemConfig {
+        if (map == null) return ServiceItemConfig(defaultKey, defaultName, false, "")
+        val key = map["key"] as? String ?: defaultKey
+        val name = map["name"] as? String ?: defaultName
+        val isDisabled = map["isDisabled"] as? Boolean ?: false
+        val reason = map["reason"] as? String ?: ""
+        return ServiceItemConfig(key, name, isDisabled, reason)
+    }
+
+    private fun parseSocialMediaLink(map: Map<*, *>?): SocialMediaLink? {
+        if (map == null) return null
+        val id = map["id"] as? String ?: return null
+        val name = map["name"] as? String ?: ""
+        val logoBase64 = map["logoBase64"] as? String ?: ""
+        val iconKey = map["iconKey"] as? String ?: "telegram"
+        val url = map["url"] as? String ?: ""
+        return SocialMediaLink(id, name, logoBase64, iconKey, url)
+    }
+
+    private fun getDefaultPaidPackages(): List<PaidPackage> = listOf(
+        PaidPackage(
+            id = "pkg_starter_1k",
+            name = "Starter Package",
+            views = 1000,
+            price = 500.0,
+            description = "High quality real visits, quick start & safe delivery.",
+            badge = "Starter"
+        ),
+        PaidPackage(
+            id = "pkg_growth_2k5",
+            name = "Growth Package",
+            views = 2500,
+            price = 1200.0,
+            description = "High retention visitors to boost organic engagement.",
+            badge = "Popular"
+        ),
+        PaidPackage(
+            id = "pkg_pro_5k",
+            name = "Pro Traffic Package",
+            views = 5000,
+            price = 2300.0,
+            description = "Premium targeted views, fast delivery & priority queue.",
+            badge = "Best Value"
+        ),
+        PaidPackage(
+            id = "pkg_ultra_10k",
+            name = "Ultra VIP Package",
+            views = 10000,
+            price = 4500.0,
+            description = "Maximum traffic volume with dedicated priority processing.",
+            badge = "VIP"
+        )
+    )
+
+    private fun parsePaidPackage(data: Map<String, Any?>): PaidPackage? {
+        val id = data["id"] as? String ?: return null
+        val name = data["name"] as? String ?: "Package"
+        val views = (data["views"] as? Number)?.toInt() ?: 0
+        val price = (data["price"] as? Number)?.toDouble() ?: 0.0
+        val description = data["description"] as? String ?: ""
+        val badge = data["badge"] as? String ?: ""
+        val isEnabled = (data["isEnabled"] as? Boolean) ?: true
+        return PaidPackage(
+            id = id,
+            name = name,
+            views = views,
+            price = price,
+            description = description,
+            badge = badge,
+            isEnabled = isEnabled
+        )
+    }
+
+    private fun parsePackageOrder(data: Map<String, Any?>): PackageOrder? {
+        val id = data["id"] as? String ?: return null
+        val packageId = data["packageId"] as? String ?: ""
+        val packageName = data["packageName"] as? String ?: "Package"
+        val title = data["title"] as? String ?: ""
+        val views = (data["views"] as? Number)?.toInt() ?: 0
+        val price = (data["price"] as? Number)?.toDouble() ?: 0.0
+        val targetLink = data["targetLink"] as? String ?: ""
+        val userId = data["userId"] as? String ?: ""
+        val userName = data["userName"] as? String ?: ""
+        val userEmail = data["userEmail"] as? String ?: ""
+        val statusStr = data["status"] as? String ?: "PENDING"
+        val status = try {
+            PackageOrderStatus.valueOf(statusStr.uppercase())
+        } catch (e: Exception) {
+            when (statusStr.uppercase()) {
+                "RUNNING" -> PackageOrderStatus.RUNNING
+                "COMPLETED" -> PackageOrderStatus.COMPLETED
+                "REJECTED" -> PackageOrderStatus.REJECTED
+                else -> PackageOrderStatus.PENDING
+            }
+        }
+        val dateFormatted = data["dateFormatted"] as? String ?: "Today"
+        val timeFormatted = data["timeFormatted"] as? String ?: ""
+        val rejectReason = data["rejectReason"] as? String
+        val timestamp = (data["timestamp"] as? Number)?.toLong() ?: System.currentTimeMillis()
+        return PackageOrder(
+            id = id,
+            packageId = packageId,
+            packageName = packageName,
+            title = title,
+            views = views,
+            price = price,
+            targetLink = targetLink,
+            userId = userId,
+            userName = userName,
+            userEmail = userEmail,
+            status = status,
+            dateFormatted = dateFormatted,
+            timeFormatted = timeFormatted,
+            rejectReason = rejectReason,
+            timestamp = timestamp
+        )
+    }
+
+    private fun parseCampaign(data: Map<String, Any?>): Campaign? {
+        val id = data["id"] as? String ?: return null
+        val title = data["title"] as? String ?: "Campaign"
+        val networkType = data["networkType"] as? String ?: "adstra"
+        val targetLink = data["targetLink"] as? String ?: ""
+        val packagePrice = (data["packagePrice"] as? Number)?.toDouble() ?: 0.0
+        val targetViews = (data["targetViews"] as? Number)?.toInt() ?: 0
+        val completedViews = (data["completedViews"] as? Number)?.toInt() ?: 0
+        val statusStr = data["status"] as? String ?: "PENDING"
+        val status = try {
+            CampaignStatus.valueOf(statusStr.uppercase())
+        } catch (e: Exception) {
+            when (statusStr.uppercase()) {
+                "RUNNING" -> CampaignStatus.RUNNING
+                "COMPLETED" -> CampaignStatus.COMPLETED
+                "CANCELLED" -> CampaignStatus.CANCELLED
+                else -> CampaignStatus.PENDING
+            }
+        }
+        val createdDate = data["createdDate"] as? String ?: "Today"
+        return Campaign(
+            id = id,
+            title = title,
+            networkType = networkType,
+            targetLink = targetLink,
+            packagePrice = packagePrice,
+            targetViews = targetViews,
+            completedViews = completedViews,
+            status = status,
+            createdDate = createdDate
+        )
+    }
+
+    private fun parseReferral(data: Map<String, Any?>): ReferralUser? {
+        val id = data["id"] as? String ?: return null
+        val username = (data["username"] as? String) ?: (data["friendName"] as? String) ?: "Member"
+        val joinDate = (data["joinDate"] as? String) ?: (data["joinedDateFormatted"] as? String) ?: "Today"
+        val reward = (data["reward"] as? Number)?.toDouble() ?: (data["rewardAmount"] as? Number)?.toDouble() ?: 100.0
+        val statusStr = (data["status"] as? String) ?: "ACTIVE"
+        val status = if (statusStr.equals("PENDING", ignoreCase = true)) ReferralStatus.PENDING else ReferralStatus.ACTIVE
+        return ReferralUser(
+            id = id,
+            username = if (username.startsWith("@")) username else "@$username",
+            joinDate = joinDate,
+            status = status,
+            reward = reward
+        )
+    }
+
+    private fun parseTransaction(data: Map<String, Any?>): Transaction? {
+        val id = data["id"] as? String ?: return null
+        val title = data["title"] as? String ?: "Transaction"
+        val typeStr = data["type"] as? String ?: ""
+        val type = try {
+            TransactionType.valueOf(typeStr.uppercase())
+        } catch (e: Exception) {
+            when (typeStr.uppercase()) {
+                "DEPOSIT" -> TransactionType.DEPOSIT
+                "WITHDRAWAL" -> TransactionType.WITHDRAWAL
+                "TASK_REWARD" -> TransactionType.TASK_REWARD
+                "REFERRAL_REWARD" -> TransactionType.REFERRAL_REWARD
+                "CAMPAIGN_PAYMENT" -> TransactionType.CAMPAIGN_PAYMENT
+                else -> if (title.contains("Deposit", true)) TransactionType.DEPOSIT else if (title.contains("Withdraw", true)) TransactionType.WITHDRAWAL else TransactionType.TASK_REWARD
+            }
+        }
+        val amount = (data["amount"] as? Number)?.toDouble() ?: 0.0
+        val dateFormatted = data["dateFormatted"] as? String ?: "Today"
+        val timeFormatted = data["timeFormatted"] as? String ?: ""
+        val transactionId = (data["transactionId"] as? String) ?: (data["trxId"] as? String) ?: id
+        val statusStr = data["status"] as? String ?: "COMPLETED"
+        val status = try {
+            TransactionStatus.valueOf(statusStr.uppercase())
+        } catch (e: Exception) {
+            if (statusStr.equals("PENDING", true)) TransactionStatus.PENDING else TransactionStatus.COMPLETED
+        }
+        val note = data["note"] as? String ?: ""
+        return Transaction(
+            id = id,
+            title = title,
+            type = type,
+            amount = amount,
+            dateFormatted = dateFormatted,
+            timeFormatted = timeFormatted,
+            transactionId = transactionId,
+            status = status,
+            note = note
+        )
+    }
+
+    private fun attachUserListeners(userId: String) {
+        if (userId.isBlank()) return
+
+        com.example.data.FirebaseRealtimeDbManager.attachUserRealtimeListener(userId) { data ->
+            val bal = (data["balance"] as? Number)?.toDouble()
+            val totalDep = (data["totalDeposit"] as? Number)?.toDouble()
+            val totalWith = (data["totalWithdrawal"] as? Number)?.toDouble()
+            val totalRef = (data["totalReferralEarnings"] as? Number)?.toDouble()
+            val appliedRef = data["appliedReferralCode"] as? String
+            val roleFromDb = data["role"] as? String
+            val permissionsMap = data["permissions"] as? Map<String, Any?>
+            val parsedPermissions = permissionsMap?.mapValues { it.value == true || it.value.toString() == "true" } ?: emptyMap()
+
+            if (appliedRef != null && _userProfile.value.appliedReferralCode == null) {
+                _userProfile.update { it.copy(appliedReferralCode = appliedRef) }
+                prefs.edit().putString("user_applied_referral", appliedRef).apply()
+            }
+
+            _userProfile.update { current ->
+                val finalRole = if (current.email == "d@gmail.com") "OWNER" else (roleFromDb ?: current.role)
+                current.copy(
+                    role = finalRole,
+                    permissions = parsedPermissions
+                )
+            }
+
+            if (bal != null) {
+                _walletState.update { current ->
+                    current.copy(
+                        balance = bal,
+                        totalDeposit = totalDep ?: current.totalDeposit,
+                        totalWithdrawal = totalWith ?: current.totalWithdrawal,
+                        totalReferralEarnings = totalRef ?: current.totalReferralEarnings
+                    )
+                }
+            }
+        }
+
+        com.example.data.FirebaseRealtimeDbManager.attachUserCampaignsListener(userId) { rawList ->
+            val parsedList = rawList.mapNotNull { parseCampaign(it) }.reversed()
+            _campaigns.value = parsedList
+            _totalCampaignCount.value = parsedList.size
+        }
+
+        com.example.data.FirebaseRealtimeDbManager.attachUserReferralsListener(userId) { rawList ->
+            val parsedList = rawList.mapNotNull { parseReferral(it) }.reversed()
+            _referrals.value = parsedList
+            _totalReferralCount.value = parsedList.size
+        }
+
+        com.example.data.FirebaseRealtimeDbManager.attachUserTransactionsListener(userId) { rawList ->
+            val parsedList = rawList.mapNotNull { parseTransaction(it) }.reversed()
+            if (parsedList.isNotEmpty()) {
+                _transactions.value = parsedList
+            }
+        }
+
+        com.example.data.FirebaseRealtimeDbManager.attachUserPackageOrdersListener(userId) { rawList ->
+            val parsedList = rawList.mapNotNull { parsePackageOrder(it) }.sortedByDescending { it.timestamp }
+            _userPackageOrders.value = parsedList
+        }
     }
 
     private fun loadSavedSession() {
@@ -296,6 +758,7 @@ class AppRepository private constructor(context: Context) {
         val savedReferral = prefs.getString("user_referral", null)
         val savedAppliedReferral = prefs.getString("user_applied_referral", null)
         val savedBalance = prefs.getFloat("user_balance", -1f)
+        val savedRole = prefs.getString("user_role", "USER") ?: "USER"
 
         if (!savedUserId.isNullOrBlank() && !savedFullName.isNullOrBlank()) {
             val phone = if (savedContactType == "phone") savedContact ?: "" else ""
@@ -313,6 +776,7 @@ class AppRepository private constructor(context: Context) {
                 registrationDate = "Registered",
                 referralCode = savedReferral ?: "PAY${savedUserId.takeLast(4)}",
                 appliedReferralCode = savedAppliedReferral,
+                role = if (email == "d@gmail.com") "OWNER" else savedRole,
                 isLoggedIn = true
             )
             _isLoggedIn.value = true
@@ -321,30 +785,7 @@ class AppRepository private constructor(context: Context) {
                 _walletState.update { it.copy(balance = savedBalance.toDouble()) }
             }
 
-            // Attach Realtime Firebase listener for this user
-            com.example.data.FirebaseRealtimeDbManager.attachUserRealtimeListener(savedUserId) { data ->
-                val bal = (data["balance"] as? Number)?.toDouble()
-                val totalDep = (data["totalDeposit"] as? Number)?.toDouble()
-                val totalWith = (data["totalWithdrawal"] as? Number)?.toDouble()
-                val totalRef = (data["totalReferralEarnings"] as? Number)?.toDouble()
-                val appliedRef = data["appliedReferralCode"] as? String
-
-                if (appliedRef != null && _userProfile.value.appliedReferralCode == null) {
-                    _userProfile.update { it.copy(appliedReferralCode = appliedRef) }
-                    prefs.edit().putString("user_applied_referral", appliedRef).apply()
-                }
-
-                if (bal != null) {
-                    _walletState.update { current ->
-                        current.copy(
-                            balance = bal,
-                            totalDeposit = totalDep ?: current.totalDeposit,
-                            totalWithdrawal = totalWith ?: current.totalWithdrawal,
-                            totalReferralEarnings = totalRef ?: current.totalReferralEarnings
-                        )
-                    }
-                }
-            }
+            attachUserListeners(savedUserId)
         }
     }
 
@@ -356,6 +797,12 @@ class AppRepository private constructor(context: Context) {
         referralCodeInput: String?,
         onResult: (Boolean, String?) -> Unit
     ) {
+        if (_serviceControlSettings.value.userRegistration.isDisabled) {
+            val reason = _serviceControlSettings.value.getServiceReason("user_registration")
+            onResult(false, reason)
+            return
+        }
+
         val cleanName = fullName.trim()
         val cleanContact = contactValue.trim()
         val cleanPassword = password.trim()
@@ -394,6 +841,7 @@ class AppRepository private constructor(context: Context) {
             "password" to cleanPassword,
             "referralCode" to refCode,
             "appliedReferralCode" to (referralCodeInput?.takeIf { it.isNotBlank() }),
+            "role" to (if (contactType == "email" && cleanContact == "d@gmail.com") "OWNER" else "USER"),
             "balance" to initialBonus,
             "totalDeposit" to 0.0,
             "totalWithdrawal" to 0.0,
@@ -418,6 +866,7 @@ class AppRepository private constructor(context: Context) {
                     .putString("user_account_id", accId)
                     .putString("user_referral", refCode)
                     .putFloat("user_balance", initialBonus.toFloat())
+                    .putString("user_role", if (contactType == "email" && cleanContact == "d@gmail.com") "OWNER" else "USER")
                     .apply()
 
                 _userProfile.value = UserProfile(
@@ -432,6 +881,7 @@ class AppRepository private constructor(context: Context) {
                     registrationDate = getCurrentDateFormatted(),
                     referralCode = refCode,
                     appliedReferralCode = referralCodeInput?.takeIf { it.isNotBlank() },
+                    role = if (contactType == "email" && cleanContact == "d@gmail.com") "OWNER" else "USER",
                     isLoggedIn = true
                 )
 
@@ -471,6 +921,17 @@ class AppRepository private constructor(context: Context) {
                     "note" to welcomeTxn.note
                 )
                 com.example.data.FirebaseRealtimeDbManager.pushUserTransaction(userId, txnMap)
+
+                if (!referralCodeInput.isNullOrBlank()) {
+                    com.example.data.FirebaseRealtimeDbManager.applyReferralBonusInCloud(
+                        refereeUserId = userId,
+                        refereeName = cleanName,
+                        cleanCode = referralCodeInput.trim().uppercase(),
+                        bonusReward = 50.0
+                    ) { _, _, _ -> }
+                }
+
+                attachUserListeners(userId)
 
                 onResult(true, null)
             } else {
@@ -514,6 +975,10 @@ class AppRepository private constructor(context: Context) {
                 val totalDep = (userData["totalDeposit"] as? Number)?.toDouble() ?: 0.0
                 val totalWith = (userData["totalWithdrawal"] as? Number)?.toDouble() ?: 0.0
                 val totalRef = (userData["totalReferralEarnings"] as? Number)?.toDouble() ?: 0.0
+                val roleFromDb = userData["role"] as? String ?: "USER"
+                val finalRole = if (email == "d@gmail.com") "OWNER" else roleFromDb
+                val permissionsMap = userData["permissions"] as? Map<String, Any?>
+                val parsedPermissions = permissionsMap?.mapValues { it.value == true || it.value.toString() == "true" } ?: emptyMap()
 
                 prefs.edit()
                     .putBoolean("is_logged_in", true)
@@ -525,6 +990,7 @@ class AppRepository private constructor(context: Context) {
                     .putString("user_referral", refCode)
                     .putString("user_applied_referral", appliedRef)
                     .putFloat("user_balance", balance.toFloat())
+                    .putString("user_role", finalRole)
                     .apply()
 
                 _userProfile.value = UserProfile(
@@ -539,6 +1005,8 @@ class AppRepository private constructor(context: Context) {
                     registrationDate = "Active",
                     referralCode = refCode,
                     appliedReferralCode = appliedRef,
+                    role = finalRole,
+                    permissions = parsedPermissions,
                     isLoggedIn = true
                 )
 
@@ -552,13 +1020,7 @@ class AppRepository private constructor(context: Context) {
 
                 _isLoggedIn.value = true
 
-                // Attach Firebase realtime sync
-                com.example.data.FirebaseRealtimeDbManager.attachUserRealtimeListener(userId) { liveData ->
-                    val liveBal = (liveData["balance"] as? Number)?.toDouble()
-                    if (liveBal != null) {
-                        _walletState.update { it.copy(balance = liveBal) }
-                    }
-                }
+                attachUserListeners(userId)
 
                 onResult(true, null)
             } else {
@@ -573,10 +1035,21 @@ class AppRepository private constructor(context: Context) {
             .remove("user_id")
             .remove("user_full_name")
             .remove("user_contact")
+            .remove("user_contact_type")
+            .remove("user_account_id")
+            .remove("user_referral")
+            .remove("user_applied_referral")
+            .remove("user_balance")
             .apply()
 
         _isLoggedIn.value = false
-        _userProfile.value = DemoDataProvider.getInitialUser().copy(isLoggedIn = false)
+        _userProfile.value = UserProfile(isLoggedIn = false)
+        _walletState.value = WalletState(balance = 0.0, totalDeposit = 0.0, totalWithdrawal = 0.0, totalReferralEarnings = 0.0)
+        _campaigns.value = emptyList()
+        _referrals.value = emptyList()
+        _transactions.value = emptyList()
+        _totalCampaignCount.value = 0
+        _totalReferralCount.value = 0
     }
 
     fun toggleDarkMode() {
@@ -605,33 +1078,45 @@ class AppRepository private constructor(context: Context) {
         current[networkId] = pointsPer100Views
         com.example.data.FirebaseRealtimeDbManager.updateAdminSetting("campaign_rates", current)
     }
-    
-    fun addAdminDepositMethod(method: String) {
-        val current = _depositMethods.value.toMutableList()
-        if (!current.contains(method)) {
-            current.add(method)
-            com.example.data.FirebaseRealtimeDbManager.updateAdminSetting("deposit_methods", current)
-        }
+
+    fun updateAdminOnlineUsersRange(min: Int, max: Int) {
+        val safeMin = if (min < 1) 1 else min
+        val safeMax = if (max < safeMin) safeMin else max
+        _onlineUsersMin.value = safeMin
+        _onlineUsersMax.value = safeMax
+        prefs.edit().putInt("online_users_min", safeMin).putInt("online_users_max", safeMax).apply()
+        com.example.data.FirebaseRealtimeDbManager.updateAdminSetting("online_users_min", safeMin)
+        com.example.data.FirebaseRealtimeDbManager.updateAdminSetting("online_users_max", safeMax)
     }
     
-    fun removeAdminDepositMethod(method: String) {
-        val current = _depositMethods.value.toMutableList()
-        if (current.remove(method)) {
-            com.example.data.FirebaseRealtimeDbManager.updateAdminSetting("deposit_methods", current)
-        }
+    fun addAdminDepositMethod(name: String, number: String, instructions: String = "") {
+        val current = _depositMethods.value.filter { it.name != name.trim() }.toMutableList()
+        current.add(DepositMethodItem(name = name.trim(), number = number.trim(), instructions = instructions.trim()))
+        _depositMethods.value = current
+        val mappedForDb = current.map { mapOf("name" to it.name, "number" to it.number, "instructions" to it.instructions) }
+        com.example.data.FirebaseRealtimeDbManager.updateAdminSetting("deposit_methods", mappedForDb)
+    }
+    
+    fun removeAdminDepositMethod(name: String) {
+        val current = _depositMethods.value.filter { it.name != name }.toMutableList()
+        _depositMethods.value = current
+        val mappedForDb = current.map { mapOf("name" to it.name, "number" to it.number, "instructions" to it.instructions) }
+        com.example.data.FirebaseRealtimeDbManager.updateAdminSetting("deposit_methods", mappedForDb)
     }
     
     fun addAdminWithdrawalMethod(method: String) {
         val current = _withdrawalMethods.value.toMutableList()
-        if (!current.contains(method)) {
-            current.add(method)
+        if (!current.contains(method.trim())) {
+            current.add(method.trim())
+            _withdrawalMethods.value = current
             com.example.data.FirebaseRealtimeDbManager.updateAdminSetting("withdrawal_methods", current)
         }
     }
     
     fun removeAdminWithdrawalMethod(method: String) {
         val current = _withdrawalMethods.value.toMutableList()
-        if (current.remove(method)) {
+        if (current.remove(method.trim())) {
+            _withdrawalMethods.value = current
             com.example.data.FirebaseRealtimeDbManager.updateAdminSetting("withdrawal_methods", current)
         }
     }
@@ -673,6 +1158,127 @@ class AppRepository private constructor(context: Context) {
         com.example.data.FirebaseRealtimeDbManager.updateCampaignStatus(campaignId, status, rejectReason)
     }
 
+    fun orderPackage(packageItem: PaidPackage, title: String, targetLink: String): Result<PackageOrder> {
+        val user = _userProfile.value
+        if (!user.isLoggedIn || user.id.isBlank()) {
+            return Result.failure(IllegalStateException("Please log in to order a package."))
+        }
+        val cleanLink = targetLink.trim()
+        val cleanTitle = title.trim()
+        if (cleanLink.isBlank()) {
+            return Result.failure(IllegalArgumentException("Please enter a valid target link."))
+        }
+        if (cleanTitle.isBlank()) {
+            return Result.failure(IllegalArgumentException("Please enter a title for your order."))
+        }
+        val currentBalance = _walletState.value.balance
+        if (currentBalance < packageItem.price) {
+            return Result.failure(IllegalStateException("Insufficient balance! You need ${FormatUtils.formatCredits(packageItem.price)} but you have ${FormatUtils.formatCredits(currentBalance)}."))
+        }
+
+        val newBalance = currentBalance - packageItem.price
+        _walletState.update { it.copy(balance = newBalance) }
+        prefs.edit().putFloat("user_balance", newBalance.toFloat()).apply()
+
+        val orderId = "PKG-${UUID.randomUUID().toString().take(8).uppercase()}"
+        val dateFormatted = SimpleDateFormat("dd MMM yyyy", Locale.US).format(Date())
+        val timeFormatted = SimpleDateFormat("hh:mm a", Locale.US).format(Date())
+
+        val order = PackageOrder(
+            id = orderId,
+            packageId = packageItem.id,
+            packageName = packageItem.name,
+            title = cleanTitle,
+            views = packageItem.views,
+            price = packageItem.price,
+            targetLink = cleanLink,
+            userId = user.id,
+            userName = user.fullName,
+            userEmail = if (user.email.isNotBlank()) user.email else user.contactValue,
+            status = PackageOrderStatus.PENDING,
+            dateFormatted = dateFormatted,
+            timeFormatted = timeFormatted,
+            timestamp = System.currentTimeMillis()
+        )
+
+        // Push order to Firebase
+        val orderMap = mapOf(
+            "id" to order.id,
+            "packageId" to order.packageId,
+            "packageName" to order.packageName,
+            "title" to order.title,
+            "views" to order.views,
+            "price" to order.price,
+            "targetLink" to order.targetLink,
+            "userId" to order.userId,
+            "userName" to order.userName,
+            "userEmail" to order.userEmail,
+            "status" to order.status.name,
+            "dateFormatted" to order.dateFormatted,
+            "timeFormatted" to order.timeFormatted,
+            "timestamp" to order.timestamp
+        )
+        com.example.data.FirebaseRealtimeDbManager.pushPackageOrder(user.id, orderMap)
+
+        // Add transaction record
+        val txnId = "TXN-${UUID.randomUUID().toString().take(8).uppercase()}"
+        val txn = Transaction(
+            id = UUID.randomUUID().toString(),
+            title = "Package Order: ${packageItem.name}",
+            type = TransactionType.PACKAGE_ORDER,
+            amount = packageItem.price,
+            dateFormatted = dateFormatted,
+            timeFormatted = timeFormatted,
+            transactionId = txnId,
+            status = TransactionStatus.COMPLETED,
+            note = "${packageItem.views} Views for $cleanLink"
+        )
+        _transactions.update { listOf(txn) + it }
+        val txnMap = mapOf(
+            "id" to txn.id,
+            "title" to txn.title,
+            "type" to txn.type.name,
+            "amount" to txn.amount,
+            "dateFormatted" to txn.dateFormatted,
+            "timeFormatted" to txn.timeFormatted,
+            "transactionId" to txn.transactionId,
+            "status" to txn.status.name,
+            "note" to txn.note
+        )
+        com.example.data.FirebaseRealtimeDbManager.pushUserTransaction(user.id, txnMap)
+        com.example.data.FirebaseRealtimeDbManager.syncUserWallet(
+            user.id,
+            newBalance,
+            _walletState.value.totalDeposit,
+            _walletState.value.totalWithdrawal,
+            _walletState.value.totalReferralEarnings
+        )
+
+        return Result.success(order)
+    }
+
+    fun saveAdminPaidPackage(pkg: PaidPackage) {
+        val id = if (pkg.id.isBlank()) "pkg_${UUID.randomUUID().toString().take(8)}" else pkg.id
+        val map = mapOf(
+            "id" to id,
+            "name" to pkg.name.trim(),
+            "views" to pkg.views,
+            "price" to pkg.price,
+            "description" to pkg.description.trim(),
+            "badge" to pkg.badge.trim(),
+            "isEnabled" to pkg.isEnabled
+        )
+        com.example.data.FirebaseRealtimeDbManager.savePaidPackage(map)
+    }
+
+    fun deleteAdminPaidPackage(packageId: String) {
+        com.example.data.FirebaseRealtimeDbManager.deletePaidPackage(packageId)
+    }
+
+    fun updateAdminPackageOrderStatus(orderId: String, status: String, rejectReason: String? = null) {
+        com.example.data.FirebaseRealtimeDbManager.updatePackageOrderStatus(orderId, status, rejectReason)
+    }
+
     fun toggleBalanceVisibility() {
         _walletState.update { current ->
             current.copy(isBalanceVisible = !current.isBalanceVisible)
@@ -694,13 +1300,25 @@ class AppRepository private constructor(context: Context) {
         return sdf.format(Date())
     }
 
-    fun deposit(amount: Double, method: String): Result<Unit> {
+    fun deposit(
+        amount: Double,
+        method: String,
+        methodNumber: String = "",
+        senderNumber: String = "",
+        trxId: String = ""
+    ): Result<Unit> {
         if (amount <= 0) {
             return Result.failure(IllegalArgumentException("Amount must be greater than zero."))
         }
 
-        val txnId = generateTxnId()
+        val actualTxnId = if (trxId.isNotBlank()) trxId.trim().uppercase() else generateTxnId()
         val id = UUID.randomUUID().toString()
+        val noteDetails = if (senderNumber.isNotBlank()) {
+            "$method ($methodNumber) - Sender: $senderNumber"
+        } else {
+            "$method $methodNumber".trim()
+        }
+
         val newTxn = Transaction(
             id = id,
             title = "Deposit",
@@ -708,9 +1326,9 @@ class AppRepository private constructor(context: Context) {
             amount = amount,
             dateFormatted = "Today",
             timeFormatted = getCurrentTimeFormatted(),
-            transactionId = txnId,
+            transactionId = actualTxnId,
             status = TransactionStatus.PENDING,
-            note = "${method}"
+            note = noteDetails
         )
 
         _transactions.update { current ->
@@ -725,9 +1343,12 @@ class AppRepository private constructor(context: Context) {
             "userName" to _userProfile.value.fullName,
             "amount" to amount,
             "method" to method,
+            "methodNumber" to methodNumber,
+            "senderNumber" to senderNumber.trim(),
+            "trxId" to actualTxnId,
+            "transactionId" to actualTxnId,
             "dateFormatted" to "Today",
             "timeFormatted" to getCurrentTimeFormatted(),
-            "transactionId" to txnId,
             "status" to "PENDING"
         )
         
@@ -994,7 +1615,7 @@ class AppRepository private constructor(context: Context) {
             "createdDate" to newCampaign.createdDate,
             "userId" to _userProfile.value.id
         )
-        com.example.data.FirebaseRealtimeDbManager.pushCampaignToDb(campaignMap)
+        com.example.data.FirebaseRealtimeDbManager.pushCampaignToDb(_userProfile.value.id, campaignMap)
         
         val txnMap = mapOf(
             "id" to newTxn.id,
@@ -1114,5 +1735,172 @@ class AppRepository private constructor(context: Context) {
             listOf(ticket) + current
         }
         return Result.success(ticket)
+    }
+
+    fun updateUserRole(userId: String, role: String) {
+        com.example.data.FirebaseRealtimeDbManager.updateUserRole(userId, role)
+    }
+
+    fun updateUserAdminPermissions(userId: String, permissions: Map<String, Boolean>) {
+        com.example.data.FirebaseRealtimeDbManager.updateUserAdminPermissions(userId, permissions)
+    }
+
+    fun removeAdminAccess(userId: String) {
+        com.example.data.FirebaseRealtimeDbManager.updateUserRole(userId, "USER")
+    }
+
+    fun updateDeveloperInfo(info: DeveloperInfo) {
+        val map = mapOf<String, Any?>(
+            "name" to info.name,
+            "title" to info.title,
+            "email" to info.email,
+            "phone" to info.phone,
+            "website" to info.website,
+            "description" to info.description,
+            "avatarBase64" to info.avatarBase64
+        )
+        _developerInfo.value = info
+        com.example.data.FirebaseRealtimeDbManager.saveDeveloperInfo(map)
+    }
+
+    fun updateUserAvatar(avatarBase64: String) {
+        val uid = _userProfile.value.id
+        if (uid.isNotBlank() && uid != "user_default") {
+            _userProfile.update { it.copy(avatarBase64 = avatarBase64) }
+            com.example.data.FirebaseRealtimeDbManager.updateUserAvatar(uid, avatarBase64)
+        }
+    }
+
+    fun openChatWithUser(targetUserId: String) {
+        activeChatUserId = targetUserId
+        _currentChatMessages.value = emptyList()
+        activeChatListener = com.example.data.FirebaseRealtimeDbManager.attachUserSupportMessagesListener(targetUserId) { messagesMap ->
+            val parsed = messagesMap.values.filterIsInstance<Map<String, Any?>>().mapNotNull { map ->
+                val id = map["id"] as? String ?: return@mapNotNull null
+                val senderId = map["senderId"] as? String ?: ""
+                val senderName = map["senderName"] as? String ?: "User"
+                val senderRole = map["senderRole"] as? String ?: "USER"
+                val message = map["message"] as? String ?: ""
+                val voiceBase64 = map["voiceBase64"] as? String ?: ""
+                val voiceDuration = (map["voiceDurationSeconds"] as? Number)?.toInt() ?: 0
+                val replyToMessageId = map["replyToMessageId"] as? String
+                val replyToText = map["replyToText"] as? String
+                val replyToSenderName = map["replyToSenderName"] as? String
+                val timestamp = (map["timestamp"] as? Number)?.toLong() ?: 0L
+                val dateFormatted = map["dateFormatted"] as? String ?: ""
+                val timeFormatted = map["timeFormatted"] as? String ?: ""
+                val isDeleted = (map["isDeleted"] as? Boolean) ?: false
+                SupportChatMessage(
+                    id = id,
+                    senderId = senderId,
+                    senderName = senderName,
+                    senderRole = senderRole,
+                    message = message,
+                    voiceBase64 = voiceBase64,
+                    voiceDurationSeconds = voiceDuration,
+                    replyToMessageId = replyToMessageId,
+                    replyToText = replyToText,
+                    replyToSenderName = replyToSenderName,
+                    timestamp = timestamp,
+                    dateFormatted = dateFormatted,
+                    timeFormatted = timeFormatted,
+                    isDeleted = isDeleted
+                )
+            }.sortedBy { it.timestamp }
+            _currentChatMessages.value = parsed
+        }
+    }
+
+    fun closeChatWithUser() {
+        activeChatUserId = null
+        _currentChatMessages.value = emptyList()
+    }
+
+    fun sendSupportChatMessage(
+        targetUserId: String,
+        messageText: String,
+        voiceBase64: String = "",
+        voiceDurationSeconds: Int = 0,
+        replyToMessageId: String? = null,
+        replyToText: String? = null,
+        replyToSenderName: String? = null
+    ) {
+        val current = _userProfile.value
+        val msgId = "msg_" + System.currentTimeMillis() + "_" + (100..999).random()
+        val now = System.currentTimeMillis()
+        val dateFormatted = getCurrentDateFormatted()
+        val timeFormatted = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.US).format(java.util.Date(now))
+
+        val isSenderAdmin = current.role == "ADMIN" || current.role == "OWNER" || current.email == "d@gmail.com"
+        val senderRole = if (isSenderAdmin) (if (current.email == "d@gmail.com" || current.role == "OWNER") "OWNER" else "ADMIN") else "USER"
+
+        val msgData = hashMapOf<String, Any?>(
+            "id" to msgId,
+            "senderId" to current.id,
+            "senderName" to current.fullName,
+            "senderRole" to senderRole,
+            "message" to messageText.trim(),
+            "voiceBase64" to voiceBase64,
+            "voiceDurationSeconds" to voiceDurationSeconds,
+            "replyToMessageId" to replyToMessageId,
+            "replyToText" to replyToText,
+            "replyToSenderName" to replyToSenderName,
+            "timestamp" to now,
+            "dateFormatted" to dateFormatted,
+            "timeFormatted" to timeFormatted,
+            "isDeleted" to false
+        )
+
+        val lastSummary = if (voiceBase64.isNotBlank()) "🎤 Voice message (${voiceDurationSeconds}s)" else messageText.trim()
+
+        val threadSummary = hashMapOf<String, Any?>(
+            "userId" to targetUserId,
+            "lastMessage" to lastSummary,
+            "lastTimestamp" to now
+        )
+
+        if (!isSenderAdmin) {
+            // When user sends, also update their contact details in the thread summary
+            threadSummary["userName"] = current.fullName
+            threadSummary["userEmail"] = current.email
+            threadSummary["userPhone"] = current.phone
+            threadSummary["userAvatar"] = current.avatarBase64
+        }
+
+        com.example.data.FirebaseRealtimeDbManager.sendSupportMessage(
+            userId = targetUserId,
+            messageId = msgId,
+            messageData = msgData,
+            threadSummary = threadSummary
+        )
+    }
+
+    fun deleteSupportChatMessage(targetUserId: String, messageId: String) {
+        com.example.data.FirebaseRealtimeDbManager.deleteSupportMessage(targetUserId, messageId)
+    }
+
+    fun updateServiceStatus(serviceKey: String, isDisabled: Boolean, reason: String) {
+        com.example.data.FirebaseRealtimeDbManager.updateSingleService(serviceKey, isDisabled, reason)
+    }
+
+    fun updateMaintenanceSettings(settings: MaintenanceSettings) {
+        val linksData = settings.socialLinks.map { link ->
+            mapOf(
+                "id" to link.id,
+                "name" to link.name,
+                "logoBase64" to link.logoBase64,
+                "iconKey" to link.iconKey,
+                "url" to link.url
+            )
+        }
+        val data = mapOf<String, Any?>(
+            "isMasterEnabled" to settings.isMasterEnabled,
+            "isUserMaintenance" to settings.isUserMaintenance,
+            "userNote" to settings.userNote,
+            "isAdminMaintenance" to settings.isAdminMaintenance,
+            "adminNote" to settings.adminNote,
+            "socialLinks" to linksData
+        )
+        com.example.data.FirebaseRealtimeDbManager.saveMaintenanceSettings(data)
     }
 }
