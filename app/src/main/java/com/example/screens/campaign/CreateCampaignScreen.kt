@@ -89,8 +89,6 @@ fun CreateCampaignScreen(
     val walletState by repository.walletState.collectAsState()
     val campaignRates by repository.campaignRates.collectAsState()
     val serviceSettings by repository.serviceControlSettings.collectAsState()
-    val isCampaignDisabled = serviceSettings.isServiceDisabled("campaigns")
-    val campaignReason = serviceSettings.getServiceReason("campaigns")
     
     val networks = listOf(
         NetworkOption(
@@ -115,8 +113,18 @@ fun CreateCampaignScreen(
             accentColor = Color(0xFF10B981)
         )
     )
+    
+    val availableNetworks = networks.filter { network ->
+        !serviceSettings.isServiceDisabled("campaign_run_${network.id}")
+    }
+    
+    val isAllDisabled = availableNetworks.isEmpty()
+    val isCampaignDisabled = isAllDisabled
+    val campaignReason = if (isCampaignDisabled) "সব ধরনের ক্যাম্পেইন রান করা বন্ধ আছে।" else ""
 
-    var selectedNetwork by remember { mutableStateOf(networks.first().id) }
+    var selectedNetwork by remember(availableNetworks) { 
+        mutableStateOf(availableNetworks.firstOrNull()?.id ?: networks.first().id) 
+    }
     var title by remember { mutableStateOf("") }
     var targetLink by remember { mutableStateOf("") }
     var targetViewsStr by remember { mutableStateOf("") }

@@ -48,7 +48,8 @@ val ALL_ADMIN_PERMISSIONS = listOf(
     AdminPermissionDefinition("service_control", "Service Control", "Turn specific services (deposit, withdraw, campaign, refer) on/off with custom notes", Icons.Default.PowerSettingsNew),
     AdminPermissionDefinition("maintenance_mode", "Maintenance Mode", "Toggle user maintenance mode during system updates", Icons.Default.Engineering),
     AdminPermissionDefinition("support_center", "Live Support Center", "Manage user chat threads, reply & voice notes", Icons.Default.HeadsetMic),
-    AdminPermissionDefinition("developer_settings", "Developer Profile", "Edit developer details, avatar photo & socials", Icons.Default.Code)
+    AdminPermissionDefinition("developer_settings", "Developer Profile", "Edit developer details, avatar photo & socials", Icons.Default.Code),
+    AdminPermissionDefinition("popup_settings", "Popup Settings", "Manage the welcome popup configurations", Icons.Default.Campaign)
 )
 
 @Composable

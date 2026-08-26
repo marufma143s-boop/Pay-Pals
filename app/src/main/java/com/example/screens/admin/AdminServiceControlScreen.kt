@@ -75,6 +75,27 @@ val APP_SERVICE_DEFINITIONS = listOf(
         icon = Icons.Default.MonetizationOn
     ),
     ServiceDefinition(
+        key = "campaign_run_adsterra",
+        title = "Users Can Run Adsterra",
+        titleBn = "ইউজার এ ডেসট্রা ক্যাম্পেইন",
+        description = "Allow users to create and run Adsterra campaigns.",
+        icon = Icons.Default.Campaign
+    ),
+    ServiceDefinition(
+        key = "campaign_run_blogger",
+        title = "Users Can Run Blogger",
+        titleBn = "ইউজার ব্লগার ক্যাম্পেইন",
+        description = "Allow users to create and run Blogger campaigns.",
+        icon = Icons.Default.Campaign
+    ),
+    ServiceDefinition(
+        key = "campaign_run_monetag",
+        title = "Users Can Run Monetag",
+        titleBn = "ইউজার মনিট্যাগ ক্যাম্পেইন",
+        description = "Allow users to create and run Monetag campaigns.",
+        icon = Icons.Default.Campaign
+    ),
+    ServiceDefinition(
         key = "referral",
         title = "Referral System",
         titleBn = "রেফারেল সিস্টেম",
@@ -200,6 +221,9 @@ fun AdminServiceControlScreen(repository: AppRepository) {
                     "campaign_adsterra" -> serviceSettings.campaignAdsterra
                     "campaign_blogger" -> serviceSettings.campaignBlogger
                     "campaign_monetag" -> serviceSettings.campaignMonetag
+                    "campaign_run_adsterra" -> serviceSettings.campaignRunAdsterra
+                    "campaign_run_blogger" -> serviceSettings.campaignRunBlogger
+                    "campaign_run_monetag" -> serviceSettings.campaignRunMonetag
                     "referral" -> serviceSettings.referral
                     "paid_packages" -> serviceSettings.paidPackages
                     "user_registration" -> serviceSettings.userRegistration

@@ -81,17 +81,6 @@ fun SupportCenterScreen(
     val userProfile by repository.userProfile.collectAsState()
     var isLiveChatOpen by remember { mutableStateOf(false) }
 
-    if (isLiveChatOpen) {
-        LiveChatScreen(
-            repository = repository,
-            targetUserId = userProfile.id,
-            targetUserName = "PayPulse 24/7 Support",
-            isAdminView = false,
-            onBackClick = { isLiveChatOpen = false }
-        )
-        return
-    }
-
     val categories = listOf("Wallet & Payment", "Campaign Promotion", "Task & Rewards", "Referral System", "Account Security", "Other")
     var selectedCategory by remember { mutableStateOf(categories[0]) }
     var isCategoryDropdownExpanded by remember { mutableStateOf(false) }
@@ -125,23 +114,32 @@ fun SupportCenterScreen(
         )
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .testTag("support_center_screen")
-    ) {
-        SubScreenTopBar(
-            title = "Support Center",
-            onBackClick = onBackClick
+    if (isLiveChatOpen) {
+        LiveChatScreen(
+            repository = repository,
+            targetUserId = userProfile.id,
+            targetUserName = "PayPulse 24/7 Support",
+            isAdminView = false,
+            onBackClick = { isLiveChatOpen = false }
         )
-
-        LazyColumn(
-            modifier = Modifier
+    } else {
+        Column(
+            modifier = modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .testTag("support_center_screen")
         ) {
-            // Hero: Live Support Chat Banner
+            SubScreenTopBar(
+                title = "Support Center",
+                onBackClick = onBackClick
+            )
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Hero: Live Support Chat Banner
             item {
                 Card(
                     modifier = Modifier
@@ -481,4 +479,5 @@ fun SupportCenterScreen(
             }
         }
     }
+}
 }

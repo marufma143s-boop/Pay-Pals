@@ -169,7 +169,7 @@ fun MyAccountScreen(
                                 color = Color.White.copy(alpha = 0.2f),
                                 shape = RoundedCornerShape(28.dp)
                             )
-                            .padding(vertical = 28.dp, horizontal = 20.dp),
+                            .padding(vertical = 20.dp, horizontal = 20.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(
@@ -180,7 +180,7 @@ fun MyAccountScreen(
                             Surface(
                                 shape = CircleShape,
                                 modifier = Modifier
-                                    .size(104.dp)
+                                    .size(80.dp)
                                     .border(3.5.dp, PurpleNeon, CircleShape)
                                     .shadow(8.dp, CircleShape),
                                 color = Color.White.copy(alpha = 0.2f)
@@ -193,79 +193,78 @@ fun MyAccountScreen(
                                 )
                             }
 
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
 
                             // Centered Name
                             Text(
                                 text = userProfile.fullName,
-                                style = MaterialTheme.typography.headlineSmall.copy(fontSize = 24.sp),
+                                style = MaterialTheme.typography.headlineSmall.copy(fontSize = 22.sp),
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold
                             )
 
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(2.dp))
 
                             // Centered Username Badge
                             Surface(
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(8.dp),
                                 color = Color.White.copy(alpha = 0.15f)
                             ) {
                                 Text(
                                     text = userProfile.username,
-                                    style = MaterialTheme.typography.titleSmall,
+                                    style = MaterialTheme.typography.titleSmall.copy(fontSize = 12.sp),
                                     color = PurpleNeon,
                                     fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp)
                                 )
                             }
 
-                            Spacer(modifier = Modifier.height(14.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
 
                             Text(
                                 text = "${FormatUtils.formatCreditsOnly(walletState.balance)} Credits",
-                                style = MaterialTheme.typography.titleLarge,
+                                style = MaterialTheme.typography.titleMedium,
                                 color = GoldAccent,
                                 fontWeight = FontWeight.ExtraBold
                             )
-                            Spacer(modifier = Modifier.height(14.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
 
                             // Centered Contact Info
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
                                 Text(
                                     text = userProfile.email,
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    style = MaterialTheme.typography.labelSmall,
                                     color = Color.White.copy(alpha = 0.85f)
                                 )
-
                                 Text(
                                     text = userProfile.phone,
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    style = MaterialTheme.typography.labelSmall,
                                     color = Color.White.copy(alpha = 0.85f)
                                 )
                             }
 
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
 
                             // Centered Stats Bar / Account Meta
                             Surface(
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 color = Color.Black.copy(alpha = 0.25f),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
                                     horizontalArrangement = Arrangement.SpaceEvenly,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(
                                             text = "Account ID",
-                                            style = MaterialTheme.typography.labelSmall,
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                             color = Color.White.copy(alpha = 0.6f)
                                         )
                                         Text(
@@ -278,7 +277,7 @@ fun MyAccountScreen(
 
                                     Box(
                                         modifier = Modifier
-                                            .height(24.dp)
+                                            .height(20.dp)
                                             .width(1.dp)
                                             .background(Color.White.copy(alpha = 0.2f))
                                     )
@@ -286,7 +285,7 @@ fun MyAccountScreen(
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(
                                             text = "Member Since",
-                                            style = MaterialTheme.typography.labelSmall,
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                             color = Color.White.copy(alpha = 0.6f)
                                         )
                                         Text(

@@ -52,7 +52,8 @@ fun AdminDashboardScreen(
     val canMaintenanceMode = isOwner || userProfile.hasPermission("maintenance_mode")
     val canSupportCenter = isOwner || userProfile.hasPermission("support_center")
     val canDeveloperSettings = isOwner || userProfile.hasPermission("developer_settings")
-    val canSettings = canGeneralSettings || canServiceControl || canMaintenanceMode || canSupportCenter || canDeveloperSettings
+    val canPopupSettings = isOwner || userProfile.hasPermission("popup_settings")
+    val canSettings = canGeneralSettings || canServiceControl || canMaintenanceMode || canSupportCenter || canDeveloperSettings || canPopupSettings
 
     val initialScreen = remember(canDashboard, canUsers, canDeposits, canWithdrawals) {
         when {
@@ -71,6 +72,7 @@ fun AdminDashboardScreen(
             canSupportCenter -> "settings_support"
             canDeveloperSettings -> "settings_developer"
             canGeneralSettings -> "settings_general"
+            canPopupSettings -> "settings_popup"
             else -> "dashboard"
         }
     }
@@ -291,6 +293,15 @@ fun AdminDashboardScreen(
                                         onClick = { selectedScreen = "settings_developer"; coroutineScope.launch { drawerState.close() } }
                                     )
                                 }
+                                
+                                if (canPopupSettings) {
+                                    AdminDrawerItem(
+                                        title = "Popup Notice Settings",
+                                        icon = Icons.Default.Campaign,
+                                        isSelected = selectedScreen == "settings_popup",
+                                        onClick = { selectedScreen = "settings_popup"; coroutineScope.launch { drawerState.close() } }
+                                    )
+                                }
                             }
                         }
                     }
@@ -345,6 +356,7 @@ fun AdminDashboardScreen(
                     "settings_maintenance" -> AdminSettingsScreen(repository = repository, initialSubMenu = "maintenance")
                     "settings_support" -> AdminSettingsScreen(repository = repository, initialSubMenu = "support")
                     "settings_developer" -> AdminSettingsScreen(repository = repository, initialSubMenu = "developer")
+                    "settings_popup" -> AdminSettingsScreen(repository = repository, initialSubMenu = "popup")
                 }
             }
         }
@@ -368,6 +380,7 @@ private fun getTitleForScreen(route: String): String {
         "settings_maintenance" -> "Maintenance Mode"
         "settings_support" -> "Support Center"
         "settings_developer" -> "Developer Profile"
+        "settings_popup" -> "Popup Notice Settings"
         else -> "Admin"
     }
 }
@@ -619,6 +632,15 @@ fun AdminDashboardMainContent(
                 title = "Developer Profile Settings",
                 subtitle = "Update developer profile photo, bio and contact info",
                 onClick = { onNavigate("settings_developer") }
+            )
+        }
+
+        if (isOwner || userProfile.hasPermission("popup_settings")) {
+            AdminModuleItem(
+                icon = Icons.Default.Campaign,
+                title = "Popup Notice Settings",
+                subtitle = "Configure welcome popup and social links shown on launch",
+                onClick = { onNavigate("settings_popup") }
             )
         }
     }

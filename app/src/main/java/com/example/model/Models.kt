@@ -265,9 +265,12 @@ data class ServiceItemConfig(
 data class ServiceControlSettings(
     val deposit: ServiceItemConfig = ServiceItemConfig("deposit", "Deposit Service", false, ""),
     val withdraw: ServiceItemConfig = ServiceItemConfig("withdraw", "Withdrawal Service", false, ""),
-    val campaignAdsterra: ServiceItemConfig = ServiceItemConfig("campaign_adsterra", "Adsterra Campaigns & Tasks", false, ""),
-    val campaignBlogger: ServiceItemConfig = ServiceItemConfig("campaign_blogger", "Blogger Campaigns & Tasks", false, ""),
-    val campaignMonetag: ServiceItemConfig = ServiceItemConfig("campaign_monetag", "Monetag Campaigns & Tasks", false, ""),
+    val campaignAdsterra: ServiceItemConfig = ServiceItemConfig("campaign_adsterra", "Adsterra Tasks", false, ""),
+    val campaignBlogger: ServiceItemConfig = ServiceItemConfig("campaign_blogger", "Blogger Tasks", false, ""),
+    val campaignMonetag: ServiceItemConfig = ServiceItemConfig("campaign_monetag", "Monetag Tasks", false, ""),
+    val campaignRunAdsterra: ServiceItemConfig = ServiceItemConfig("campaign_run_adsterra", "Adsterra Campaigns", false, ""),
+    val campaignRunBlogger: ServiceItemConfig = ServiceItemConfig("campaign_run_blogger", "Blogger Campaigns", false, ""),
+    val campaignRunMonetag: ServiceItemConfig = ServiceItemConfig("campaign_run_monetag", "Monetag Campaigns", false, ""),
     val referral: ServiceItemConfig = ServiceItemConfig("referral", "Referral System", false, ""),
     val paidPackages: ServiceItemConfig = ServiceItemConfig("paid_packages", "Paid Campaign Packages", false, ""),
     val userRegistration: ServiceItemConfig = ServiceItemConfig("user_registration", "New User Registration", false, "")
@@ -279,6 +282,9 @@ data class ServiceControlSettings(
             "campaign_adsterra", "adstra", "adsterra" -> campaignAdsterra.isDisabled
             "campaign_blogger", "blogger" -> campaignBlogger.isDisabled
             "campaign_monetag", "monetag" -> campaignMonetag.isDisabled
+            "campaign_run_adsterra" -> campaignRunAdsterra.isDisabled
+            "campaign_run_blogger" -> campaignRunBlogger.isDisabled
+            "campaign_run_monetag" -> campaignRunMonetag.isDisabled
             "referral", "refer" -> referral.isDisabled
             "paid_packages", "packages", "package" -> paidPackages.isDisabled
             "user_registration", "register", "registration" -> userRegistration.isDisabled
@@ -293,6 +299,9 @@ data class ServiceControlSettings(
             "campaign_adsterra", "adstra", "adsterra" -> campaignAdsterra.reason
             "campaign_blogger", "blogger" -> campaignBlogger.reason
             "campaign_monetag", "monetag" -> campaignMonetag.reason
+            "campaign_run_adsterra" -> campaignRunAdsterra.reason
+            "campaign_run_blogger" -> campaignRunBlogger.reason
+            "campaign_run_monetag" -> campaignRunMonetag.reason
             "referral", "refer" -> referral.reason
             "paid_packages", "packages", "package" -> paidPackages.reason
             "user_registration", "register", "registration" -> userRegistration.reason
@@ -316,7 +325,8 @@ data class MaintenanceSettings(
     val userNote: String = "",
     val isAdminMaintenance: Boolean = false,
     val adminNote: String = "",
-    val socialLinks: List<SocialMediaLink> = emptyList()
+    val socialLinks: List<SocialMediaLink> = emptyList(),
+    val popupNotice: PopupNoticeSettings? = null
 )
 
 data class PopupNoticeSettings(

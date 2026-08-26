@@ -38,7 +38,8 @@ fun AdminSettingsScreen(
         Triple("services", "Service Status (সার্ভিস বন্ধ)", Icons.Default.PowerSettingsNew),
         Triple("maintenance", "Maintenance Mode (মেইনটেনেন্স)", Icons.Default.Engineering),
         Triple("support", "Support Center", Icons.Default.HeadsetMic),
-        Triple("developer", "Developer Profile", Icons.Default.Code)
+        Triple("developer", "Developer Profile", Icons.Default.Code),
+        Triple("popup", "Popup Notice Settings", Icons.Default.Campaign)
     )
 
     val subMenuItems = remember(userProfile) {
@@ -49,6 +50,7 @@ fun AdminSettingsScreen(
                 "maintenance" -> userProfile.hasPermission("maintenance_mode")
                 "support" -> userProfile.hasPermission("support_center")
                 "developer" -> userProfile.hasPermission("developer_settings")
+                "popup" -> userProfile.hasPermission("popup_settings")
                 else -> true
             }
         }
@@ -149,6 +151,7 @@ fun AdminSettingsScreen(
                 "maintenance" -> AdminMaintenanceScreen(repository = repository)
                 "support" -> AdminLiveSupportScreen(repository = repository)
                 "developer" -> AdminDeveloperSettingsScreen(repository = repository)
+                "popup" -> AdminPopupSettingsScreen(repository = repository)
             }
         }
     }

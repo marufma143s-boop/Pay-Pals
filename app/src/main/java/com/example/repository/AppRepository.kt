@@ -423,9 +423,12 @@ class AppRepository private constructor(context: Context) {
             if (sData.isNotEmpty()) {
                 val deposit = parseServiceItem(sData["deposit"] as? Map<*, *>, "deposit", "Deposit Service")
                 val withdraw = parseServiceItem(sData["withdraw"] as? Map<*, *>, "withdraw", "Withdrawal Service")
-                val adsterra = parseServiceItem(sData["campaign_adsterra"] as? Map<*, *>, "campaign_adsterra", "Adsterra Campaigns & Tasks")
-                val blogger = parseServiceItem(sData["campaign_blogger"] as? Map<*, *>, "campaign_blogger", "Blogger Campaigns & Tasks")
-                val monetag = parseServiceItem(sData["campaign_monetag"] as? Map<*, *>, "campaign_monetag", "Monetag Campaigns & Tasks")
+                val adsterra = parseServiceItem(sData["campaign_adsterra"] as? Map<*, *>, "campaign_adsterra", "Adsterra Tasks")
+                val blogger = parseServiceItem(sData["campaign_blogger"] as? Map<*, *>, "campaign_blogger", "Blogger Tasks")
+                val monetag = parseServiceItem(sData["campaign_monetag"] as? Map<*, *>, "campaign_monetag", "Monetag Tasks")
+                val runAdsterra = parseServiceItem(sData["campaign_run_adsterra"] as? Map<*, *>, "campaign_run_adsterra", "Adsterra Campaigns")
+                val runBlogger = parseServiceItem(sData["campaign_run_blogger"] as? Map<*, *>, "campaign_run_blogger", "Blogger Campaigns")
+                val runMonetag = parseServiceItem(sData["campaign_run_monetag"] as? Map<*, *>, "campaign_run_monetag", "Monetag Campaigns")
                 val referral = parseServiceItem(sData["referral"] as? Map<*, *>, "referral", "Referral System")
                 val paidPackages = parseServiceItem(sData["paid_packages"] as? Map<*, *>, "paid_packages", "Paid Campaign Packages")
                 val registration = parseServiceItem(sData["user_registration"] as? Map<*, *>, "user_registration", "New User Registration")
@@ -436,6 +439,9 @@ class AppRepository private constructor(context: Context) {
                     campaignAdsterra = adsterra,
                     campaignBlogger = blogger,
                     campaignMonetag = monetag,
+                    campaignRunAdsterra = runAdsterra,
+                    campaignRunBlogger = runBlogger,
+                    campaignRunMonetag = runMonetag,
                     referral = referral,
                     paidPackages = paidPackages,
                     userRegistration = registration

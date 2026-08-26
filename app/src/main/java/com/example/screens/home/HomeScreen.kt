@@ -78,8 +78,29 @@ fun HomeScreen(
     val onlineUsersMax by repository.onlineUsersMax.collectAsState()
     val isDarkMode by repository.isDarkMode.collectAsState()
     val serviceSettings by repository.serviceControlSettings.collectAsState()
+    val maintenanceSettings by repository.maintenanceSettings.collectAsState()
 
     var disabledServiceDialogInfo by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var hasShownPopup by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+
+    if (!hasShownPopup && maintenanceSettings.popupNotice?.isEnabled == true) {
+        com.example.components.PopupNoticeDialog(
+            settings = maintenanceSettings.popupNotice!!,
+            socialLinks = maintenanceSettings.socialLinks.associate { it.iconKey to it.url },
+            onDismiss = { hasShownPopup = true },
+            onNavigate = { route -> 
+                hasShownPopup = true
+                when (route) {
+                    "deposit" -> onNavigateToDeposit()
+                    "withdraw" -> onNavigateToWithdraw()
+                    "transactions" -> onNavigateToTransactions()
+                    "campaigns", "campaign" -> onNavigateToCampaigns()
+                    "referral", "refer" -> onNavigateToRefer()
+                    "my_account", "account" -> onNavigateToAccount()
+                }
+            }
+        )
+    }
 
     val isDepositDisabled = serviceSettings.isServiceDisabled("deposit")
     val isWithdrawDisabled = serviceSettings.isServiceDisabled("withdraw")
