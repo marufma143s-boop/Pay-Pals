@@ -345,46 +345,6 @@ fun LoginScreen(
                             }
                         }
                     }
-
-                    // Quick Demo Login
-                    OutlinedButton(
-                        onClick = {
-                            contactInput = "01712345678"
-                            passwordInput = "1234"
-                            repository.login(
-                                contact = "01712345678",
-                                password = "1234"
-                            ) { success, _ ->
-                                if (!success) {
-                                    repository.register(
-                                        fullName = "Alex Johnson",
-                                        contactType = "phone",
-                                        contactValue = "01712345678",
-                                        password = "1234",
-                                        referralCodeInput = null
-                                    ) { _, _ ->
-                                        onLoginSuccess()
-                                    }
-                                } else {
-                                    onLoginSuccess()
-                                }
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(46.dp)
-                            .testTag("demo_login_button"),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    ) {
-                        Text(
-                            text = "Quick Demo Sign In",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
                 }
             }
 

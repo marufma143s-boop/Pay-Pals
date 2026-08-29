@@ -49,7 +49,9 @@ val ALL_ADMIN_PERMISSIONS = listOf(
     AdminPermissionDefinition("maintenance_mode", "Maintenance Mode", "Toggle user maintenance mode during system updates", Icons.Default.Engineering),
     AdminPermissionDefinition("support_center", "Live Support Center", "Manage user chat threads, reply & voice notes", Icons.Default.HeadsetMic),
     AdminPermissionDefinition("developer_settings", "Developer Profile", "Edit developer details, avatar photo & socials", Icons.Default.Code),
-    AdminPermissionDefinition("popup_settings", "Popup Settings", "Manage the welcome popup configurations", Icons.Default.Campaign)
+    AdminPermissionDefinition("popup_settings", "Popup Settings", "Manage the welcome popup configurations", Icons.Default.Campaign),
+    AdminPermissionDefinition("adward_settings", "Task & Break Timers", "Configure task duration, rewards and break timers", Icons.Default.Timer),
+    AdminPermissionDefinition("admin_links", "Admin Direct Links", "Add and manage admin sponsored direct links", Icons.Default.Link)
 )
 
 @Composable
@@ -176,10 +178,14 @@ fun AdminCardItem(
     val isBlocked = user["isBlocked"] as? Boolean ?: false
     val role = user["role"] as? String ?: "ADMIN"
     val isOwner = email == "d@gmail.com" || role == "OWNER"
+    val rawPin = (user["adminPin"] as? String) ?: (user["adminPin"] as? Number)?.toString() ?: ""
+    val adminPin = if (rawPin.isBlank()) (if (isOwner) "1234" else "1234") else rawPin
 
     var isExpanded by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
+    var showPinDialog by remember { mutableStateOf(false) }
     var showRevokeDialog by remember { mutableStateOf(false) }
+    var isPinVisible by remember { mutableStateOf(false) }
 
     // Permissions map from database
     val rawPerms = user["permissions"] as? Map<String, Any?>
@@ -198,10 +204,82 @@ fun AdminCardItem(
         map
     }
 
+    if (showPinDialog) {
+        var newPinInput by remember { mutableStateOf(rawPin.ifBlank { "1234" }) }
+        var pinError by remember { mutableStateOf<String?>(null) }
+
+        AlertDialog(
+            onDismissRequest = { showPinDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.VpnKey,
+                    contentDescription = null,
+                    tint = PurplePrimary,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = if (isOwner) "Change Owner PIN" else "Set Admin Security PIN",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Set a 4-6 digit numeric PIN for $name to enter the admin/owner panel:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = newPinInput,
+                        onValueChange = {
+                            if (it.length <= 6 && it.all { char -> char.isDigit() }) {
+                                newPinInput = it
+                                pinError = null
+                            }
+                        },
+                        label = { Text("Security PIN (4-6 digits)") },
+                        singleLine = true,
+                        isError = pinError != null,
+                        supportingText = pinError?.let { { Text(it, color = ErrorRed) } },
+                        leadingIcon = {
+                            Icon(Icons.Default.Lock, contentDescription = null, tint = PurplePrimary)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (newPinInput.length < 4) {
+                            pinError = "PIN must be at least 4 digits."
+                            return@Button
+                        }
+                        if (isOwner) {
+                            repository.updateOwnerPin(newPinInput)
+                        }
+                        repository.updateUserAdminPin(userId, newPinInput)
+                        showPinDialog = false
+                    }
+                ) {
+                    Text("Save PIN")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPinDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     if (showEditDialog) {
         var editName by remember { mutableStateOf(name) }
         var editEmail by remember { mutableStateOf(email) }
         var editBalance by remember { mutableStateOf(balance.toString()) }
+        var editPin by remember { mutableStateOf(rawPin.ifBlank { "1234" }) }
 
         AlertDialog(
             onDismissRequest = { showEditDialog = false },
@@ -226,11 +304,31 @@ fun AdminCardItem(
                         label = { Text("Balance (Points)") },
                         singleLine = true
                     )
+                    OutlinedTextField(
+                        value = editPin,
+                        onValueChange = {
+                            if (it.length <= 6 && it.all { char -> char.isDigit() }) {
+                                editPin = it
+                            }
+                        },
+                        label = { Text("Security PIN (পাসওয়ার্ড/পিন)") },
+                        leadingIcon = { Icon(Icons.Default.Key, contentDescription = null, tint = PurplePrimary) },
+                        singleLine = true
+                    )
                 }
             },
             confirmButton = {
                 Button(onClick = {
-                    repository.updateUserAdmin(userId, editName, editEmail, editBalance.toDoubleOrNull() ?: balance)
+                    repository.updateUserAdmin(
+                        userId = userId,
+                        name = editName,
+                        email = editEmail,
+                        balance = editBalance.toDoubleOrNull() ?: balance,
+                        pin = editPin
+                    )
+                    if (isOwner && editPin.isNotBlank()) {
+                        repository.updateOwnerPin(editPin)
+                    }
                     showEditDialog = false
                 }) {
                     Text("Save Changes")
@@ -344,29 +442,70 @@ fun AdminCardItem(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Info Bar: Balance + Status + ID
+            // Info Bar: Balance + Status + PIN + Actions
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
                         text = "Balance: ${FormatUtils.formatCredits(balance)}",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = SuccessGreen
                     )
-                    Text(
-                        text = "Status: ${if (isBlocked) "BANNED / BLOCKED" else "ACTIVE"}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isBlocked) ErrorRed else SuccessGreen,
-                        fontWeight = FontWeight.Medium
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "Status: ${if (isBlocked) "BANNED" else "ACTIVE"}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isBlocked) ErrorRed else SuccessGreen,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "•",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = PurplePrimary.copy(alpha = 0.1f),
+                            modifier = Modifier.clickable { isPinVisible = !isPinVisible }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.VpnKey,
+                                    contentDescription = null,
+                                    tint = PurplePrimary,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    text = if (isPinVisible) "PIN: $adminPin" else "PIN: ••••",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PurplePrimary
+                                )
+                            }
+                        }
+                    }
                 }
 
-                // Action Buttons: Ban, Edit, Delete
+                // Action Buttons: PIN, Ban, Edit, Delete
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { showPinDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Key,
+                            contentDescription = "Set/Change PIN",
+                            tint = PurplePrimary
+                        )
+                    }
                     if (!isOwner) {
                         IconButton(onClick = { repository.updateUserBlockStatus(userId, !isBlocked) }) {
                             Icon(

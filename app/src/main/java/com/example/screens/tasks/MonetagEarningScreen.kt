@@ -5,45 +5,15 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.MonetizationOn
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -73,24 +43,40 @@ fun MonetagEarningScreen(
 ) {
     val context = LocalContext.current
     val count by repository.monetagCount.collectAsState()
-    val limit = repository.monetagLimit
-    val walletState by repository.walletState.collectAsState()
+    val adwardSettings by repository.adwardSettings.collectAsState()
+    val config = adwardSettings.monetagConfig
+    val limit = config.dailyLimit
     val preferredBrowser by repository.preferredBrowser.collectAsState()
+    val monetagBreakUntil by repository.monetagBreakUntil.collectAsState()
 
     var isVisitingInProgress by remember { mutableStateOf(false) }
-    var secondsRemaining by remember { mutableIntStateOf(15) }
+    var secondsRemaining by remember { mutableIntStateOf(config.visitDurationSeconds) }
     var canClaimReward by remember { mutableStateOf(false) }
     var showSuccessDialog by remember { mutableStateOf(false) }
     var rewardEarned by remember { mutableStateOf(0.0) }
-    val isLimitReached = count >= limit
+    var visitStartTime by remember { mutableLongStateOf(0L) }
+    var earlyExitWarning by remember { mutableStateOf<String?>(null) }
+    var breakRemainingSec by remember { mutableLongStateOf(repository.getBreakRemainingSeconds("monetag")) }
 
-    val activeCampaign = remember(isVisitingInProgress) { repository.getActiveCampaignForNetwork("monetag") }
-    val targetUrl = remember(isVisitingInProgress) { repository.getTargetUrlForNetwork("monetag") }
+    val isLimitReached = count >= limit
+    val isOnBreak = breakRemainingSec > 0L
+
+    // Live break countdown timer
+    LaunchedEffect(monetagBreakUntil) {
+        while (true) {
+            val rem = repository.getBreakRemainingSeconds("monetag")
+            breakRemainingSec = rem
+            if (rem <= 0L) break
+            delay(1000L)
+        }
+    }
+
+    val targetInfo = remember(isVisitingInProgress, count) { repository.getTargetLinkForVisit("monetag") }
 
     // Countdown Timer for Monetag Offer
     LaunchedEffect(isVisitingInProgress) {
         if (isVisitingInProgress) {
-            secondsRemaining = 15
+            secondsRemaining = config.visitDurationSeconds
             canClaimReward = false
             while (secondsRemaining > 0) {
                 delay(1000L)
@@ -104,22 +90,39 @@ fun MonetagEarningScreen(
     val browserIcon = if (preferredBrowser.equals("firefox", ignoreCase = true)) "🦊" else "🌐"
 
     fun startOffer() {
-        if (isLimitReached) return
+        if (isLimitReached || isOnBreak) return
+        earlyExitWarning = null
+        visitStartTime = System.currentTimeMillis()
         isVisitingInProgress = true
         CustomTabsHelper.openCustomTab(
             context = context,
-            url = targetUrl,
+            url = targetInfo.url,
             preferredBrowser = preferredBrowser
         )
     }
 
     fun claimReward() {
-        val res = repository.completeVisitEarn("Monetag", rewardAmount = 30.0)
+        val elapsedSec = ((System.currentTimeMillis() - visitStartTime) / 1000).toInt()
+        if (elapsedSec < config.visitDurationSeconds) {
+            earlyExitWarning = "⚠️ ভিজিট সম্পূর্ণ হয়নি! আপনি মাত্র ${elapsedSec} সেকেন্ড সাইটে ছিলেন। পয়েন্ট পাওয়ার জন্য পুরো ${config.visitDurationSeconds} সেকেন্ড সাইটে অবস্থান করতে হবে।"
+            return
+        }
+
+        val res = repository.completeVisitEarn(
+            networkType = "monetag",
+            elapsedSeconds = elapsedSec,
+            campaignId = targetInfo.campaignId,
+            adminLinkId = targetInfo.adminLinkId
+        )
+
         if (res.isSuccess) {
-            rewardEarned = res.getOrNull() ?: 30.0
+            rewardEarned = res.getOrNull() ?: config.rewardPoints
             isVisitingInProgress = false
             canClaimReward = false
+            earlyExitWarning = null
             showSuccessDialog = true
+        } else {
+            earlyExitWarning = res.exceptionOrNull()?.message ?: "কাজ সম্পন্ন করা যায়নি।"
         }
     }
 
@@ -144,7 +147,7 @@ fun MonetagEarningScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .shadow(10.dp, RoundedCornerShape(22.dp), spotColor = PurplePrimary),
+                    .shadow(10.dp, RoundedCornerShape(22.dp), spotColor = Color(0xFF1565C0)),
                 shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
@@ -154,15 +157,15 @@ fun MonetagEarningScreen(
                         .background(
                             Brush.linearGradient(
                                 listOf(
-                                    Color(0xFF00897B).copy(alpha = 0.25f),
-                                    PurplePrimary.copy(alpha = 0.2f),
-                                    Color(0xFF07241F)
+                                    Color(0xFF1565C0).copy(alpha = 0.25f),
+                                    Color(0xFF0D47A1).copy(alpha = 0.3f),
+                                    Color(0xFF0A192F)
                                 )
                             )
                         )
                         .border(
                             1.dp,
-                            Brush.horizontalGradient(listOf(Color(0xFF26A69A), PurpleNeon)),
+                            Brush.horizontalGradient(listOf(Color(0xFF1E88E5), Color(0xFF64B5F6))),
                             RoundedCornerShape(22.dp)
                         )
                         .padding(20.dp)
@@ -183,7 +186,7 @@ fun MonetagEarningScreen(
                                         .clip(CircleShape)
                                         .background(
                                             Brush.linearGradient(
-                                                listOf(Color(0xFF00897B), Color(0xFF26A69A))
+                                                listOf(Color(0xFF1565C0), Color(0xFF1E88E5))
                                             )
                                         ),
                                     contentAlignment = Alignment.Center
@@ -204,7 +207,7 @@ fun MonetagEarningScreen(
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        text = "High CPM Ads & Direct Offers",
+                                        text = "High CPM SmartLink Tasks (${config.visitDurationSeconds}s)",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -217,7 +220,7 @@ fun MonetagEarningScreen(
                                 border = androidx.compose.foundation.BorderStroke(1.dp, GoldAccent.copy(alpha = 0.6f))
                             ) {
                                 Text(
-                                    text = "🪙 30 Credits",
+                                    text = "🪙 ${config.rewardPoints.toInt()} Credits",
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = GoldAccent,
@@ -247,9 +250,9 @@ fun MonetagEarningScreen(
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    text = if (isLimitReached) "Limit Reached" else "${(count.toFloat() / limit * 100).toInt()}%",
+                                    text = if (isLimitReached) "Limit Reached" else "${(count.toFloat() / limit.coerceAtLeast(1) * 100).toInt()}%",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (isLimitReached) SuccessGreen else PurpleNeon,
+                                    color = if (isLimitReached) SuccessGreen else Color(0xFF64B5F6),
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -263,17 +266,99 @@ fun MonetagEarningScreen(
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .fillMaxWidth((count.toFloat() / limit).coerceIn(0f, 1f))
+                                        .fillMaxWidth((count.toFloat() / limit.coerceAtLeast(1)).coerceIn(0f, 1f))
                                         .height(8.dp)
                                         .clip(RoundedCornerShape(4.dp))
                                         .background(
                                             Brush.horizontalGradient(
-                                                listOf(Color(0xFF26A69A), PurpleNeon)
+                                                listOf(Color(0xFF1565C0), Color(0xFF64B5F6))
                                             )
                                         )
                                 )
                             }
                         }
+                    }
+                }
+            }
+
+            // Break Timer Card if Active
+            if (isOnBreak) {
+                val mins = breakRemainingSec / 60
+                val secs = breakRemainingSec % 60
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)),
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.error)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.error.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.HourglassTop,
+                                contentDescription = "Break Active",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column {
+                            Text(
+                                text = "🛑 বিরতি চলছে (Break Active)",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Text(
+                                text = "প্রতি ${config.breakFrequency} টি ভিজিট পর ${config.breakDurationMinutes} মিনিট বিরতি প্রযোজ্য।",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "বাকি সময়: ${String.format("%02d:%02d", mins, secs)} মিনিট",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Early exit warning alert
+            if (earlyExitWarning != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = earlyExitWarning ?: "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
                 }
             }
@@ -295,7 +380,7 @@ fun MonetagEarningScreen(
                         Text(text = browserIcon, fontSize = 16.sp)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Custom Tab Browser: $browserName",
+                            text = "Browser: $browserName",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Medium
@@ -304,13 +389,13 @@ fun MonetagEarningScreen(
                     Text(
                         text = "Active",
                         style = MaterialTheme.typography.labelSmall,
-                        color = PurpleNeon,
+                        color = Color(0xFF64B5F6),
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
 
-            // Active Offer State / Countdown Card
+            // Active Visit State / Countdown Card
             AnimatedVisibility(
                 visible = isVisitingInProgress,
                 enter = fadeIn(),
@@ -319,10 +404,10 @@ fun MonetagEarningScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .shadow(8.dp, RoundedCornerShape(20.dp), spotColor = PurpleNeon),
+                        .shadow(8.dp, RoundedCornerShape(20.dp), spotColor = Color(0xFF1565C0)),
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = androidx.compose.foundation.BorderStroke(1.5.dp, PurpleNeon)
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF1565C0))
                 ) {
                     Column(
                         modifier = Modifier
@@ -337,9 +422,9 @@ fun MonetagEarningScreen(
                         ) {
                             if (!canClaimReward) {
                                 CircularProgressIndicator(
-                                    progress = { (15 - secondsRemaining) / 15f },
+                                    progress = { ((config.visitDurationSeconds - secondsRemaining).toFloat() / config.visitDurationSeconds.coerceAtLeast(1)).coerceIn(0f, 1f) },
                                     modifier = Modifier.size(32.dp),
-                                    color = PurpleNeon,
+                                    color = Color(0xFF1565C0),
                                     strokeCap = StrokeCap.Round
                                 )
                             } else {
@@ -353,13 +438,13 @@ fun MonetagEarningScreen(
 
                             Column {
                                 Text(
-                                    text = if (!canClaimReward) "Offer In Progress ($secondsRemaining s)" else "Offer Requirement Completed!",
+                                    text = if (!canClaimReward) "Viewing SmartLink (${secondsRemaining}s)" else "SmartLink View Completed!",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = if (!canClaimReward) MaterialTheme.colorScheme.onSurface else SuccessGreen
                                 )
                                 Text(
-                                    text = if (!canClaimReward) "Stay on the sponsor page until timer finishes" else "Your 🪙 30 Credits reward is ready to claim",
+                                    text = if (!canClaimReward) "Stay on page until timer reaches zero" else "🪙 ${config.rewardPoints.toInt()} Credits ready to claim",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -374,7 +459,7 @@ fun MonetagEarningScreen(
                                 onClick = {
                                     CustomTabsHelper.openCustomTab(
                                         context = context,
-                                        url = targetUrl,
+                                        url = targetInfo.url,
                                         preferredBrowser = preferredBrowser
                                     )
                                 },
@@ -383,7 +468,7 @@ fun MonetagEarningScreen(
                             ) {
                                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Reopen Offer", style = MaterialTheme.typography.labelSmall)
+                                Text("Reopen Tab", style = MaterialTheme.typography.labelSmall)
                             }
 
                             Button(
@@ -396,7 +481,7 @@ fun MonetagEarningScreen(
                                 )
                             ) {
                                 Text(
-                                    text = if (canClaimReward) "Claim 🪙 30 Credits" else "Waiting (${secondsRemaining}s)",
+                                    text = if (canClaimReward) "Claim 🪙 ${config.rewardPoints.toInt()}" else "Viewing (${secondsRemaining}s)",
                                     fontWeight = FontWeight.Bold,
                                     style = MaterialTheme.typography.labelMedium
                                 )
@@ -406,7 +491,7 @@ fun MonetagEarningScreen(
                 }
             }
 
-            // Interactive Monetag Offer Starter Card
+            // Interactive SmartLink Starter Card
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -425,19 +510,19 @@ fun MonetagEarningScreen(
                         modifier = Modifier
                             .size(64.dp)
                             .clip(CircleShape)
-                            .background(PurplePrimary.copy(alpha = 0.2f)),
+                            .background(Color(0xFF1565C0).copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = if (isLimitReached) Icons.Filled.CheckCircle else Icons.Filled.MonetizationOn,
+                            imageVector = if (isLimitReached) Icons.Filled.CheckCircle else if (isOnBreak) Icons.Default.HourglassTop else Icons.Filled.MonetizationOn,
                             contentDescription = null,
-                            tint = if (isLimitReached) SuccessGreen else Color(0xFF26A69A),
+                            tint = if (isLimitReached) SuccessGreen else if (isOnBreak) MaterialTheme.colorScheme.error else Color(0xFF1565C0),
                             modifier = Modifier.size(34.dp)
                         )
                     }
 
                     Text(
-                        text = if (isLimitReached) "All Today's Offers Completed!" else "Start Monetag Offer",
+                        text = if (isLimitReached) "All Today's SmartLinks Visited!" else if (isOnBreak) "Break Time Active" else "Visit Monetag SmartLink",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -445,19 +530,46 @@ fun MonetagEarningScreen(
 
                     Text(
                         text = if (isLimitReached)
-                            "You have reached today's limit ($limit/$limit). Come back tomorrow for new Monetag offers!"
+                            "You have reached today's limit ($limit/$limit). Come back tomorrow for more rewards!"
+                        else if (isOnBreak)
+                            "Please wait for the break timer to expire before starting new links."
                         else
-                            "Visit Monetag sponsor link in $browserName Custom Tab for 15 seconds. Earn 🪙 30 Credits instantly credited to your wallet balance.",
+                            "Click below to open Monetag smart link for ${config.visitDurationSeconds} seconds. 🪙 ${config.rewardPoints.toInt()} Credits will be credited instantly upon verification.",
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 18.sp
                     )
 
-                    if (activeCampaign != null) {
+                    if (targetInfo.isSponsoredAdminLink) {
                         Surface(
                             shape = RoundedCornerShape(10.dp),
-                            color = Color(0xFF00897B).copy(alpha = 0.12f),
+                            color = PurpleNeon.copy(alpha = 0.15f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Stars,
+                                    contentDescription = null,
+                                    tint = PurpleNeon,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Sponsored: ${targetInfo.title}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = PurpleNeon,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    } else if (targetInfo.campaignId != null) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color(0xFF1565C0).copy(alpha = 0.12f),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -467,14 +579,14 @@ fun MonetagEarningScreen(
                                 Icon(
                                     imageVector = Icons.Filled.MonetizationOn,
                                     contentDescription = null,
-                                    tint = Color(0xFF00897B),
+                                    tint = Color(0xFF1565C0),
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Active Campaign: ${activeCampaign.title}",
+                                    text = "Verified Campaign: ${targetInfo.title}",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = Color(0xFF26A69A),
+                                    color = Color(0xFF1E88E5),
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -483,14 +595,14 @@ fun MonetagEarningScreen(
 
                     Button(
                         onClick = { startOffer() },
-                        enabled = !isLimitReached,
+                        enabled = !isLimitReached && !isOnBreak,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp)
                             .testTag("start_monetag_visit_btn"),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF00897B)
+                            containerColor = Color(0xFF1565C0)
                         )
                     ) {
                         Row(
@@ -505,7 +617,7 @@ fun MonetagEarningScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = if (isLimitReached) "Limit Completed" else "Visit & Earn 🪙 30 Credits",
+                                text = if (isLimitReached) "Limit Completed" else if (isOnBreak) "On Break..." else "Visit & Earn 🪙 ${config.rewardPoints.toInt()} Credits",
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
@@ -529,19 +641,19 @@ fun MonetagEarningScreen(
                         Icon(
                             imageVector = Icons.Filled.Info,
                             contentDescription = null,
-                            tint = PurpleNeon,
+                            tint = Color(0xFF1E88E5),
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Rules & Guidelines",
+                            text = "Monetag Rules & Guidelines",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     Text(
-                        text = "• View sponsor offer in $browserName Custom Tab for 15 seconds.\n• Reward credits upon completing the visit session.\n• Instant wallet balance deposit with daily limits refresh.",
+                        text = "• View smartlink landing in $browserName for full ${config.visitDurationSeconds} seconds.\n• Do not exit before countdown completes.\n• Automatic break of ${config.breakDurationMinutes}m triggers every ${config.breakFrequency} visits.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 18.sp
@@ -552,7 +664,7 @@ fun MonetagEarningScreen(
 
         // Success Dialog
         if (showSuccessDialog) {
-            androidx.compose.material3.AlertDialog(
+            AlertDialog(
                 onDismissRequest = { showSuccessDialog = false },
                 icon = {
                     Icon(
@@ -564,14 +676,14 @@ fun MonetagEarningScreen(
                 },
                 title = {
                     Text(
-                        text = "Offer Completed!",
+                        text = "Monetag Visit Completed!",
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center
                     )
                 },
                 text = {
                     Text(
-                        text = "Awesome! 🪙 ${rewardEarned.toInt()} Credits have been added to your wallet balance.",
+                        text = "Great job! 🪙 ${rewardEarned.toInt()} Credits have been credited to your wallet balance.",
                         textAlign = TextAlign.Center,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -579,7 +691,7 @@ fun MonetagEarningScreen(
                 confirmButton = {
                     Button(
                         onClick = { showSuccessDialog = false },
-                        colors = ButtonDefaults.buttonColors(containerColor = PurplePrimary)
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0))
                     ) {
                         Text("Continue Earning")
                     }

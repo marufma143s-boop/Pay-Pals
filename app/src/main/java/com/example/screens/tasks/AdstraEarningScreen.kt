@@ -5,47 +5,15 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AdsClick
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.HourglassTop
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.OpenInBrowser
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -75,24 +43,40 @@ fun AdstraEarningScreen(
 ) {
     val context = LocalContext.current
     val count by repository.adstraCount.collectAsState()
-    val limit = repository.adstraLimit
-    val walletState by repository.walletState.collectAsState()
+    val adwardSettings by repository.adwardSettings.collectAsState()
+    val config = adwardSettings.adstraConfig
+    val limit = config.dailyLimit
     val preferredBrowser by repository.preferredBrowser.collectAsState()
+    val adstraBreakUntil by repository.adstraBreakUntil.collectAsState()
 
     var isVisitingInProgress by remember { mutableStateOf(false) }
-    var secondsRemaining by remember { mutableIntStateOf(15) }
+    var secondsRemaining by remember { mutableIntStateOf(config.visitDurationSeconds) }
     var canClaimReward by remember { mutableStateOf(false) }
     var showSuccessDialog by remember { mutableStateOf(false) }
     var rewardEarned by remember { mutableStateOf(0.0) }
-    val isLimitReached = count >= limit
+    var visitStartTime by remember { mutableLongStateOf(0L) }
+    var earlyExitWarning by remember { mutableStateOf<String?>(null) }
+    var breakRemainingSec by remember { mutableLongStateOf(repository.getBreakRemainingSeconds("adstra")) }
 
-    val activeCampaign = remember(isVisitingInProgress) { repository.getActiveCampaignForNetwork("adstra") }
-    val targetUrl = remember(isVisitingInProgress) { repository.getTargetUrlForNetwork("adstra") }
+    val isLimitReached = count >= limit
+    val isOnBreak = breakRemainingSec > 0L
+
+    // Live break countdown timer
+    LaunchedEffect(adstraBreakUntil) {
+        while (true) {
+            val rem = repository.getBreakRemainingSeconds("adstra")
+            breakRemainingSec = rem
+            if (rem <= 0L) break
+            delay(1000L)
+        }
+    }
+
+    val targetInfo = remember(isVisitingInProgress, count) { repository.getTargetLinkForVisit("adstra") }
 
     // Countdown Timer for Visit
     LaunchedEffect(isVisitingInProgress) {
         if (isVisitingInProgress) {
-            secondsRemaining = 15
+            secondsRemaining = config.visitDurationSeconds
             canClaimReward = false
             while (secondsRemaining > 0) {
                 delay(1000L)
@@ -106,22 +90,39 @@ fun AdstraEarningScreen(
     val browserIcon = if (preferredBrowser.equals("firefox", ignoreCase = true)) "🦊" else "🌐"
 
     fun startVisit() {
-        if (isLimitReached) return
+        if (isLimitReached || isOnBreak) return
+        earlyExitWarning = null
+        visitStartTime = System.currentTimeMillis()
         isVisitingInProgress = true
         CustomTabsHelper.openCustomTab(
             context = context,
-            url = targetUrl,
+            url = targetInfo.url,
             preferredBrowser = preferredBrowser
         )
     }
 
     fun claimReward() {
-        val res = repository.completeVisitEarn("Adstra", rewardAmount = 25.0)
+        val elapsedSec = ((System.currentTimeMillis() - visitStartTime) / 1000).toInt()
+        if (elapsedSec < config.visitDurationSeconds) {
+            earlyExitWarning = "⚠️ ভিজিট সম্পূর্ণ হয়নি! আপনি মাত্র ${elapsedSec} সেকেন্ড সাইটে ছিলেন। পয়েন্ট পাওয়ার জন্য পুরো ${config.visitDurationSeconds} সেকেন্ড সাইটে থাকতে হবে।"
+            return
+        }
+
+        val res = repository.completeVisitEarn(
+            networkType = "adstra",
+            elapsedSeconds = elapsedSec,
+            campaignId = targetInfo.campaignId,
+            adminLinkId = targetInfo.adminLinkId
+        )
+
         if (res.isSuccess) {
-            rewardEarned = res.getOrNull() ?: 25.0
+            rewardEarned = res.getOrNull() ?: config.rewardPoints
             isVisitingInProgress = false
             canClaimReward = false
+            earlyExitWarning = null
             showSuccessDialog = true
+        } else {
+            earlyExitWarning = res.exceptionOrNull()?.message ?: "কাজ সম্পন্ন করা যায়নি।"
         }
     }
 
@@ -206,7 +207,7 @@ fun AdstraEarningScreen(
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        text = "Verified Sponsor Visits",
+                                        text = "Stay ${config.visitDurationSeconds}s to earn reward",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -219,7 +220,7 @@ fun AdstraEarningScreen(
                                 border = androidx.compose.foundation.BorderStroke(1.dp, GoldAccent.copy(alpha = 0.6f))
                             ) {
                                 Text(
-                                    text = "🪙 25 Credits",
+                                    text = "🪙 ${config.rewardPoints.toInt()} Credits",
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = GoldAccent,
@@ -249,7 +250,7 @@ fun AdstraEarningScreen(
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    text = if (isLimitReached) "Limit Reached" else "${(count.toFloat() / limit * 100).toInt()}%",
+                                    text = if (isLimitReached) "Limit Reached" else "${(count.toFloat() / limit.coerceAtLeast(1) * 100).toInt()}%",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (isLimitReached) SuccessGreen else PurpleNeon,
                                     fontWeight = FontWeight.Bold
@@ -265,7 +266,7 @@ fun AdstraEarningScreen(
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .fillMaxWidth((count.toFloat() / limit).coerceIn(0f, 1f))
+                                        .fillMaxWidth((count.toFloat() / limit.coerceAtLeast(1)).coerceIn(0f, 1f))
                                         .height(8.dp)
                                         .clip(RoundedCornerShape(4.dp))
                                         .background(
@@ -276,6 +277,88 @@ fun AdstraEarningScreen(
                                 )
                             }
                         }
+                    }
+                }
+            }
+
+            // Break Timer Card if Active
+            if (isOnBreak) {
+                val mins = breakRemainingSec / 60
+                val secs = breakRemainingSec % 60
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)),
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.error)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.error.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.HourglassTop,
+                                contentDescription = "Break Active",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column {
+                            Text(
+                                text = "🛑 বিরতি চলছে (Break Active)",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Text(
+                                text = "প্রতি ${config.breakFrequency} টি ভিজিট পর ${config.breakDurationMinutes} মিনিট বিরতি প্রযোজ্য।",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "বাকি সময়: ${String.format("%02d:%02d", mins, secs)} মিনিট",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Early exit warning alert
+            if (earlyExitWarning != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = earlyExitWarning ?: "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
                 }
             }
@@ -297,7 +380,7 @@ fun AdstraEarningScreen(
                         Text(text = browserIcon, fontSize = 16.sp)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Custom Tab Browser: $browserName",
+                            text = "Browser: $browserName",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Medium
@@ -339,7 +422,7 @@ fun AdstraEarningScreen(
                         ) {
                             if (!canClaimReward) {
                                 CircularProgressIndicator(
-                                    progress = { (15 - secondsRemaining) / 15f },
+                                    progress = { ((config.visitDurationSeconds - secondsRemaining).toFloat() / config.visitDurationSeconds.coerceAtLeast(1)).coerceIn(0f, 1f) },
                                     modifier = Modifier.size(32.dp),
                                     color = PurpleNeon,
                                     strokeCap = StrokeCap.Round
@@ -355,13 +438,13 @@ fun AdstraEarningScreen(
 
                             Column {
                                 Text(
-                                    text = if (!canClaimReward) "Visit In Progress ($secondsRemaining s)" else "Visit Requirement Completed!",
+                                    text = if (!canClaimReward) "Visit In Progress (${secondsRemaining}s)" else "Visit Requirement Completed!",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = if (!canClaimReward) MaterialTheme.colorScheme.onSurface else SuccessGreen
                                 )
                                 Text(
-                                    text = if (!canClaimReward) "Stay on the page until timer finishes" else "Your 🪙 25 Credits reward is ready to claim",
+                                    text = if (!canClaimReward) "Stay on page until countdown completes" else "🪙 ${config.rewardPoints.toInt()} Credits ready to claim",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -376,7 +459,7 @@ fun AdstraEarningScreen(
                                 onClick = {
                                     CustomTabsHelper.openCustomTab(
                                         context = context,
-                                        url = targetUrl,
+                                        url = targetInfo.url,
                                         preferredBrowser = preferredBrowser
                                     )
                                 },
@@ -398,7 +481,7 @@ fun AdstraEarningScreen(
                                 )
                             ) {
                                 Text(
-                                    text = if (canClaimReward) "Claim 🪙 25 Credits" else "Waiting (${secondsRemaining}s)",
+                                    text = if (canClaimReward) "Claim 🪙 ${config.rewardPoints.toInt()}" else "Waiting (${secondsRemaining}s)",
                                     fontWeight = FontWeight.Bold,
                                     style = MaterialTheme.typography.labelMedium
                                 )
@@ -431,15 +514,15 @@ fun AdstraEarningScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = if (isLimitReached) Icons.Filled.CheckCircle else Icons.Filled.OpenInBrowser,
+                            imageVector = if (isLimitReached) Icons.Filled.CheckCircle else if (isOnBreak) Icons.Default.HourglassTop else Icons.Filled.OpenInBrowser,
                             contentDescription = null,
-                            tint = if (isLimitReached) SuccessGreen else PurpleNeon,
+                            tint = if (isLimitReached) SuccessGreen else if (isOnBreak) MaterialTheme.colorScheme.error else PurpleNeon,
                             modifier = Modifier.size(34.dp)
                         )
                     }
 
                     Text(
-                        text = if (isLimitReached) "All Today's Visits Completed!" else "Start New Partner Visit",
+                        text = if (isLimitReached) "All Today's Visits Completed!" else if (isOnBreak) "Break Time Active" else "Start Partner Visit",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -447,16 +530,43 @@ fun AdstraEarningScreen(
 
                     Text(
                         text = if (isLimitReached)
-                            "You have maximized today's limit ($limit/$limit). Come back tomorrow for more rewards!"
+                            "You have reached today's limit ($limit/$limit). Come back tomorrow for more rewards!"
+                        else if (isOnBreak)
+                            "Please wait for the break timer to expire before starting new visits."
                         else
-                            "Click below to open sponsor link in $browserName Custom Tab for 15 seconds. 🪙 25 Credits will be deposited instantly into your balance.",
+                            "Click below to open partner link for ${config.visitDurationSeconds} seconds. 🪙 ${config.rewardPoints.toInt()} Credits will be credited instantly upon verification.",
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 18.sp
                     )
 
-                    if (activeCampaign != null) {
+                    if (targetInfo.isSponsoredAdminLink) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = PurpleNeon.copy(alpha = 0.15f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Stars,
+                                    contentDescription = null,
+                                    tint = PurpleNeon,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Sponsored: ${targetInfo.title}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = PurpleNeon,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    } else if (targetInfo.campaignId != null) {
                         Surface(
                             shape = RoundedCornerShape(10.dp),
                             color = Color(0xFFE65100).copy(alpha = 0.12f),
@@ -474,7 +584,7 @@ fun AdstraEarningScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Active Campaign: ${activeCampaign.title}",
+                                    text = "Verified Campaign: ${targetInfo.title}",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = Color(0xFFFF9800),
                                     fontWeight = FontWeight.Bold
@@ -485,7 +595,7 @@ fun AdstraEarningScreen(
 
                     Button(
                         onClick = { startVisit() },
-                        enabled = !isLimitReached,
+                        enabled = !isLimitReached && !isOnBreak,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp)
@@ -507,7 +617,7 @@ fun AdstraEarningScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = if (isLimitReached) "Limit Completed" else "Visit & Earn 🪙 25 Credits",
+                                text = if (isLimitReached) "Limit Completed" else if (isOnBreak) "On Break..." else "Visit & Earn 🪙 ${config.rewardPoints.toInt()} Credits",
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
@@ -543,7 +653,7 @@ fun AdstraEarningScreen(
                         )
                     }
                     Text(
-                        text = "• View sponsor website in $browserName Custom Tab for 15 seconds.\n• Return to PayPulse to claim your reward.\n• Rewards are deposited immediately to your available balance.",
+                        text = "• View sponsor website in $browserName for full ${config.visitDurationSeconds} seconds.\n• Do not close or back out early before timer expires.\n• Automatic break of ${config.breakDurationMinutes}m triggers every ${config.breakFrequency} visits.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 18.sp
@@ -554,7 +664,7 @@ fun AdstraEarningScreen(
 
         // Success Dialog
         if (showSuccessDialog) {
-            androidx.compose.material3.AlertDialog(
+            AlertDialog(
                 onDismissRequest = { showSuccessDialog = false },
                 icon = {
                     Icon(

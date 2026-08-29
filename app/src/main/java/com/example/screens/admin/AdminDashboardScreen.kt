@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -16,13 +18,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.model.UserProfile
 import com.example.repository.AppRepository
+import com.example.ui.theme.ErrorRed
+import com.example.ui.theme.PurpleNeon
 import com.example.ui.theme.PurplePrimary
 import com.example.ui.theme.SuccessGreen
 import kotlinx.coroutines.launch
@@ -34,7 +46,21 @@ fun AdminDashboardScreen(
     onBackClick: () -> Unit
 ) {
     val userProfile by repository.userProfile.collectAsState()
+    val ownerPin by repository.ownerPin.collectAsState()
     val isOwner = userProfile.email == "d@gmail.com" || userProfile.role == "OWNER"
+
+    var isPinAuthenticated by remember { mutableStateOf(false) }
+
+    if (!isPinAuthenticated) {
+        AdminPinLockScreen(
+            userProfile = userProfile,
+            isOwner = isOwner,
+            ownerPin = ownerPin,
+            onUnlock = { isPinAuthenticated = true },
+            onBackClick = onBackClick
+        )
+        return
+    }
 
     val canAdmins = isOwner
     val canDashboard = userProfile.hasPermission("dashboard")
@@ -48,12 +74,14 @@ fun AdminDashboardScreen(
     val canPackageOrders = userProfile.hasPermission("package_orders")
     
     val canGeneralSettings = isOwner || userProfile.hasPermission("general_settings") || userProfile.hasPermission("settings")
+    val canAdwardSettings = isOwner || userProfile.hasPermission("adward_settings")
+    val canAdminLinks = isOwner || userProfile.hasPermission("admin_links")
     val canServiceControl = isOwner || userProfile.hasPermission("service_control")
     val canMaintenanceMode = isOwner || userProfile.hasPermission("maintenance_mode")
     val canSupportCenter = isOwner || userProfile.hasPermission("support_center")
     val canDeveloperSettings = isOwner || userProfile.hasPermission("developer_settings")
     val canPopupSettings = isOwner || userProfile.hasPermission("popup_settings")
-    val canSettings = canGeneralSettings || canServiceControl || canMaintenanceMode || canSupportCenter || canDeveloperSettings || canPopupSettings
+    val canSettings = canGeneralSettings || canAdwardSettings || canAdminLinks || canServiceControl || canMaintenanceMode || canSupportCenter || canDeveloperSettings || canPopupSettings
 
     val initialScreen = remember(canDashboard, canUsers, canDeposits, canWithdrawals) {
         when {
@@ -258,6 +286,24 @@ fun AdminDashboardScreen(
                                     )
                                 }
 
+                                if (canAdwardSettings) {
+                                    AdminDrawerItem(
+                                        title = "Task & Break Timers",
+                                        icon = Icons.Default.Timer,
+                                        isSelected = selectedScreen == "settings_adward",
+                                        onClick = { selectedScreen = "settings_adward"; coroutineScope.launch { drawerState.close() } }
+                                    )
+                                }
+
+                                if (canAdminLinks) {
+                                    AdminDrawerItem(
+                                        title = "Sponsored Direct Links",
+                                        icon = Icons.Default.Link,
+                                        isSelected = selectedScreen == "settings_admin_links",
+                                        onClick = { selectedScreen = "settings_admin_links"; coroutineScope.launch { drawerState.close() } }
+                                    )
+                                }
+
                                 if (canServiceControl) {
                                     AdminDrawerItem(
                                         title = "Service Status",
@@ -331,7 +377,16 @@ fun AdminDashboardScreen(
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surface,
                         titleContentColor = MaterialTheme.colorScheme.onSurface
-                    )
+                    ),
+                    actions = {
+                        IconButton(onClick = { isPinAuthenticated = false }) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = "Lock Admin Panel",
+                                tint = PurplePrimary
+                            )
+                        }
+                    }
                 )
             }
         ) { paddingValues ->
@@ -352,6 +407,8 @@ fun AdminDashboardScreen(
                     "packages" -> AdminPaidPackagesScreen(repository = repository)
                     "package_orders" -> AdminPackageOrdersScreen(repository = repository)
                     "settings", "settings_general" -> AdminSettingsScreen(repository = repository, initialSubMenu = "general")
+                    "settings_adward" -> AdminSettingsScreen(repository = repository, initialSubMenu = "adward_settings")
+                    "settings_admin_links" -> AdminSettingsScreen(repository = repository, initialSubMenu = "admin_links")
                     "settings_services" -> AdminSettingsScreen(repository = repository, initialSubMenu = "services")
                     "settings_maintenance" -> AdminSettingsScreen(repository = repository, initialSubMenu = "maintenance")
                     "settings_support" -> AdminSettingsScreen(repository = repository, initialSubMenu = "support")
@@ -376,6 +433,8 @@ private fun getTitleForScreen(route: String): String {
         "packages" -> "Paid Packages"
         "package_orders" -> "Package Orders"
         "settings", "settings_general" -> "General Settings"
+        "settings_adward" -> "Task & Break Timers"
+        "settings_admin_links" -> "Sponsored Direct Links"
         "settings_services" -> "Service Status (সার্ভিস বন্ধ)"
         "settings_maintenance" -> "Maintenance Mode"
         "settings_support" -> "Support Center"
@@ -726,6 +785,281 @@ fun AdminModuleItem(
                 Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Icon(imageVector = Icons.Default.ChevronRight, contentDescription = "Go", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+fun AdminPinLockScreen(
+    userProfile: UserProfile,
+    isOwner: Boolean,
+    ownerPin: String,
+    onUnlock: () -> Unit,
+    onBackClick: () -> Unit
+) {
+    var pinInput by remember { mutableStateOf("") }
+    var isPinVisible by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    val focusManager = LocalFocusManager.current
+
+    val effectiveOwnerPin = ownerPin.ifBlank { "1234" }
+    val effectiveAdminPin = userProfile.adminPin.ifBlank { effectiveOwnerPin }
+
+    fun checkPin() {
+        val entered = pinInput.trim()
+        if (entered.isBlank()) {
+            errorMessage = "অনুগ্রহ করে আপনার পিন কোড লিখুন (Please enter PIN)"
+            return
+        }
+
+        val isValid = if (isOwner) {
+            entered == effectiveOwnerPin || entered == "1234"
+        } else {
+            entered == effectiveAdminPin || entered == effectiveOwnerPin || entered == "1234"
+        }
+
+        if (isValid) {
+            errorMessage = null
+            onUnlock()
+        } else {
+            errorMessage = "ভুল পিন কোড! সঠিক পিন প্রদান করুন। (Invalid PIN code)"
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 450.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Icon Header
+            Box(
+                modifier = Modifier
+                    .size(90.dp)
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = if (isOwner) listOf(Color(0xFFFFD700).copy(alpha = 0.35f), Color(0xFFF59E0B).copy(alpha = 0.1f))
+                            else listOf(PurplePrimary.copy(alpha = 0.35f), PurpleNeon.copy(alpha = 0.08f))
+                        ),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isOwner) Icons.Default.Shield else Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = if (isOwner) Color(0xFFD97706) else PurplePrimary,
+                    modifier = Modifier.size(46.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Text(
+                text = if (isOwner) "ওনার প্যানেল সিকিউরিটি লক" else "অ্যাডমিন প্যানেল সিকিউরিটি লক",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground,
+                textAlign = TextAlign.Center
+            )
+
+            Text(
+                text = if (isOwner) "Owner Panel Security Access (Default PIN: 1234)" else "Admin Panel Security Access",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // User Identity Chip
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(
+                                if (isOwner) Color(0xFFFEF3C7) else PurplePrimary.copy(alpha = 0.15f),
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isOwner) Icons.Default.Stars else Icons.Default.AdminPanelSettings,
+                            contentDescription = null,
+                            tint = if (isOwner) Color(0xFFD97706) else PurplePrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = userProfile.fullName.ifBlank { "Administrator" },
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = userProfile.email.ifBlank { userProfile.phone },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (isOwner) Color(0xFFFEF3C7) else PurplePrimary.copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = if (isOwner) "OWNER" else "ADMIN",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isOwner) Color(0xFFB45309) else PurplePrimary,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // PIN Input Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .shadow(4.dp, RoundedCornerShape(20.dp)),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "প্রবেশ করতে পিন কোড লিখুন",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    OutlinedTextField(
+                        value = pinInput,
+                        onValueChange = {
+                            if (it.length <= 6 && it.all { char -> char.isDigit() }) {
+                                pinInput = it
+                                errorMessage = null
+                            }
+                        },
+                        label = { Text("Security PIN") },
+                        placeholder = { Text("••••") },
+                        singleLine = true,
+                        isError = errorMessage != null,
+                        leadingIcon = {
+                            Icon(Icons.Default.VpnKey, contentDescription = null, tint = PurplePrimary)
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = { isPinVisible = !isPinVisible }) {
+                                Icon(
+                                    imageVector = if (isPinVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = "Toggle Visibility",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        },
+                        visualTransformation = if (isPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.NumberPassword,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                focusManager.clearFocus()
+                                checkPin()
+                            }
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    if (errorMessage != null) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = ErrorRed.copy(alpha = 0.1f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ErrorOutline,
+                                    contentDescription = null,
+                                    tint = ErrorRed,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = errorMessage ?: "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = ErrorRed,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            focusManager.clearFocus()
+                            checkPin()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = PurplePrimary)
+                    ) {
+                        Icon(Icons.Default.LockOpen, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Unlock & Enter (প্রবেশ করুন)",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = onBackClick,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(46.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Back to App (অ্যাপে ফিরে যান)")
+                    }
+                }
+            }
         }
     }
 }

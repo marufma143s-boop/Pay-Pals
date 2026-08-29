@@ -31,17 +31,63 @@ class AppRepository private constructor(context: Context) {
 
     private val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
 
+    private val _adwardSettings = MutableStateFlow(AdwardSettings())
+    val adwardSettings: StateFlow<AdwardSettings> = _adwardSettings.asStateFlow()
+
+    private val _adminDirectLinks = MutableStateFlow<List<AdminDirectLink>>(emptyList())
+    val adminDirectLinks: StateFlow<List<AdminDirectLink>> = _adminDirectLinks.asStateFlow()
+
     private val _adstraCount = MutableStateFlow(0)
     val adstraCount: StateFlow<Int> = _adstraCount.asStateFlow()
-    val adstraLimit = 120
+    val adstraLimit: Int get() = _adwardSettings.value.adstraConfig.dailyLimit
 
     private val _bloggerCount = MutableStateFlow(0)
     val bloggerCount: StateFlow<Int> = _bloggerCount.asStateFlow()
-    val bloggerLimit = 80
+    val bloggerLimit: Int get() = _adwardSettings.value.bloggerConfig.dailyLimit
 
     private val _monetagCount = MutableStateFlow(0)
     val monetagCount: StateFlow<Int> = _monetagCount.asStateFlow()
-    val monetagLimit = 99
+    val monetagLimit: Int get() = _adwardSettings.value.monetagConfig.dailyLimit
+
+    // Break Timers and Batched Visits Tracking
+    private val _adstraBreakUntil = MutableStateFlow(0L)
+    val adstraBreakUntil: StateFlow<Long> = _adstraBreakUntil.asStateFlow()
+
+    private val _bloggerBreakUntil = MutableStateFlow(0L)
+    val bloggerBreakUntil: StateFlow<Long> = _bloggerBreakUntil.asStateFlow()
+
+    private val _monetagBreakUntil = MutableStateFlow(0L)
+    val monetagBreakUntil: StateFlow<Long> = _monetagBreakUntil.asStateFlow()
+
+    private val _adstraVisitsSinceBreak = MutableStateFlow(0)
+    val adstraVisitsSinceBreak: StateFlow<Int> = _adstraVisitsSinceBreak.asStateFlow()
+
+    private val _bloggerVisitsSinceBreak = MutableStateFlow(0)
+    val bloggerVisitsSinceBreak: StateFlow<Int> = _bloggerVisitsSinceBreak.asStateFlow()
+
+    private val _monetagVisitsSinceBreak = MutableStateFlow(0)
+    val monetagVisitsSinceBreak: StateFlow<Int> = _monetagVisitsSinceBreak.asStateFlow()
+
+    fun getBreakRemainingSeconds(networkType: String): Long {
+        val clean = when (networkType.lowercase().trim()) {
+            "adstra", "adsterra" -> "adstra"
+            "blogger" -> "blogger"
+            "monetag" -> "monetag"
+            else -> "adstra"
+        }
+        val breakUntil = when (clean) {
+            "adstra" -> _adstraBreakUntil.value
+            "blogger" -> _bloggerBreakUntil.value
+            "monetag" -> _monetagBreakUntil.value
+            else -> 0L
+        }
+        val diff = (breakUntil - System.currentTimeMillis()) / 1000L
+        return diff.coerceAtLeast(0L)
+    }
+
+    fun isNetworkOnBreak(networkType: String): Boolean {
+        return getBreakRemainingSeconds(networkType) > 0L
+    }
 
     fun incrementAdstraCount() {
         if (_adstraCount.value < adstraLimit) {
@@ -63,74 +109,202 @@ class AppRepository private constructor(context: Context) {
 
     fun getActiveCampaignForNetwork(networkType: String): Campaign? {
         val targetNetwork = networkType.lowercase().trim()
-        return _campaigns.value.firstOrNull { cmp ->
+        val currentUserId = _userProfile.value.id
+        val candidateList = if (_allCampaigns.value.isNotEmpty()) {
+            _allCampaigns.value.mapNotNull { parseCampaign(it) }
+        } else {
+            _campaigns.value
+        }
+        return candidateList.filter { cmp ->
             (cmp.networkType.lowercase() == targetNetwork || (targetNetwork == "adstra" && cmp.networkType.lowercase() == "adsterra")) &&
                     cmp.status == CampaignStatus.RUNNING &&
-                    cmp.remainingViews > 0
-        } ?: _campaigns.value.firstOrNull { cmp ->
-            cmp.status == CampaignStatus.RUNNING && cmp.remainingViews > 0
-        }
+                    cmp.remainingViews > 0 &&
+                    (cmp.userId.isBlank() || cmp.userId != currentUserId) // Prevent self-linking!
+        }.minByOrNull { it.timestamp }
     }
 
     fun getTargetUrlForNetwork(networkType: String): String {
-        val activeCampaign = getActiveCampaignForNetwork(networkType)
-        if (activeCampaign != null && activeCampaign.targetLink.isNotBlank()) {
-            return activeCampaign.targetLink
+        return getTargetLinkForVisit(networkType).url
+    }
+
+    fun getTargetLinkForVisit(networkType: String): VisitTargetInfo {
+        val currentUserId = _userProfile.value.id
+        val targetNetwork = networkType.lowercase().trim()
+        val cleanNetwork = when (targetNetwork) {
+            "adstra", "adsterra" -> "adstra"
+            "blogger" -> "blogger"
+            "monetag" -> "monetag"
+            else -> "adstra"
         }
-        return when (networkType.lowercase()) {
-            "adstra", "adsterra" -> "https://example.com/adsterra-sponsored-traffic"
+
+        val userNetworkVisits = when (cleanNetwork) {
+            "adstra" -> _adstraCount.value
+            "blogger" -> _bloggerCount.value
+            "monetag" -> _monetagCount.value
+            else -> 0
+        }
+
+        // 1. Admin Direct Link Interleaving: Check active admin links for this network
+        val activeAdminLinks = _adminDirectLinks.value.filter { link ->
+            link.isActive && link.url.isNotBlank() && (link.networkType.lowercase() == "all" || link.networkType.lowercase() == cleanNetwork || (cleanNetwork == "adstra" && link.networkType.lowercase() == "adsterra"))
+        }
+
+        if (activeAdminLinks.isNotEmpty()) {
+            val matchingFreqLink = activeAdminLinks.firstOrNull { link ->
+                link.frequency > 0 && ((userNetworkVisits + 1) % link.frequency == 0)
+            }
+            if (matchingFreqLink != null) {
+                val rotatedAdminLink = activeAdminLinks.minByOrNull { it.viewsServed } ?: matchingFreqLink
+                return VisitTargetInfo(
+                    url = rotatedAdminLink.url,
+                    title = rotatedAdminLink.title,
+                    isSelf = false,
+                    campaignId = null,
+                    adminLinkId = rotatedAdminLink.id,
+                    isSponsoredAdminLink = true
+                )
+            }
+        }
+
+        // 2. FIFO Campaign Queue (User campaigns that are approved and running, excluding own campaigns)
+        val candidateList = if (_allCampaigns.value.isNotEmpty()) {
+            _allCampaigns.value.mapNotNull { parseCampaign(it) }
+        } else {
+            _campaigns.value
+        }
+
+        val runningCampaigns = candidateList.filter { cmp ->
+            val matchesNet = (cmp.networkType.lowercase() == cleanNetwork || (cleanNetwork == "adstra" && cmp.networkType.lowercase() == "adsterra"))
+            val isRunning = cmp.status == CampaignStatus.RUNNING && cmp.remainingViews > 0
+            val isNotSelf = cmp.userId.isBlank() || cmp.userId != currentUserId // Prevent self-linking!
+            matchesNet && isRunning && isNotSelf
+        }.sortedBy { it.timestamp } // FIFO: Earliest approved/created campaign is served first until completed!
+
+        val topCampaign = runningCampaigns.firstOrNull()
+        if (topCampaign != null && topCampaign.targetLink.isNotBlank()) {
+            return VisitTargetInfo(
+                url = topCampaign.targetLink,
+                title = topCampaign.title,
+                isSelf = false,
+                campaignId = topCampaign.id,
+                adminLinkId = null,
+                isSponsoredAdminLink = false
+            )
+        }
+
+        // 3. If there are active admin direct links available and no user campaigns in queue, serve rotated admin link
+        if (activeAdminLinks.isNotEmpty()) {
+            val rotatedAdminLink = activeAdminLinks.minByOrNull { it.viewsServed } ?: activeAdminLinks.first()
+            return VisitTargetInfo(
+                url = rotatedAdminLink.url,
+                title = rotatedAdminLink.title,
+                isSelf = false,
+                campaignId = null,
+                adminLinkId = rotatedAdminLink.id,
+                isSponsoredAdminLink = true
+            )
+        }
+
+        // 4. Default Official Fallback URLs
+        val fallbackUrl = when (cleanNetwork) {
+            "adstra" -> "https://example.com/adsterra-sponsored-traffic"
             "blogger" -> "https://techpulse.blog/ai-trends-monetization"
             "monetag" -> "https://example.com/monetag-direct-smartlink"
             else -> "https://example.com"
         }
+        return VisitTargetInfo(
+            url = fallbackUrl,
+            title = "Official Sponsor Link",
+            isSelf = false,
+            campaignId = null,
+            adminLinkId = null,
+            isSponsoredAdminLink = false
+        )
     }
 
-    fun completeVisitEarn(networkType: String, rewardAmount: Double = 25.0, campaignId: String? = null): Result<Double> {
-        val canIncrement = when (networkType.lowercase()) {
-            "adstra", "adsterra" -> {
-                if (_adstraCount.value < adstraLimit) {
-                    _adstraCount.value += 1
-                    true
-                } else false
-            }
-            "blogger" -> {
-                if (_bloggerCount.value < bloggerLimit) {
-                    _bloggerCount.value += 1
-                    true
-                } else false
-            }
-            "monetag" -> {
-                if (_monetagCount.value < monetagLimit) {
-                    _monetagCount.value += 1
-                    true
-                } else false
-            }
-            else -> false
+    fun completeVisitEarn(
+        networkType: String,
+        elapsedSeconds: Int = 15,
+        campaignId: String? = null,
+        adminLinkId: String? = null
+    ): Result<Double> {
+        val cleanNetwork = when (networkType.lowercase().trim()) {
+            "adstra", "adsterra" -> "adstra"
+            "blogger" -> "blogger"
+            "monetag" -> "monetag"
+            else -> "adstra"
         }
 
-        if (!canIncrement) {
-            return Result.failure(IllegalStateException("Daily limit reached for this network."))
+        val config = _adwardSettings.value.getConfigForNetwork(cleanNetwork)
+
+        // 1. Check if user is currently on break for this network
+        if (isNetworkOnBreak(cleanNetwork)) {
+            val rem = getBreakRemainingSeconds(cleanNetwork)
+            val mins = rem / 60
+            val secs = rem % 60
+            return Result.failure(IllegalStateException("বিরতি চলছে! আর ${String.format("%02d:%02d", mins, secs)} মিনিট পর পুনরায় কাজ করতে পারবেন।"))
         }
 
-        // If an active campaign was visited, increment its completedViews
-        val targetCampaign = if (campaignId != null) {
-            _campaigns.value.firstOrNull { it.id == campaignId }
-        } else {
-            getActiveCampaignForNetwork(networkType)
+        // 2. Anti-fraud duration validation: User must stay on page for the full visit duration
+        if (elapsedSeconds < config.visitDurationSeconds) {
+            return Result.failure(IllegalArgumentException("কাজ সম্পন্ন হয়নি! পয়েন্ট পাওয়ার জন্য অবশ্যই পুরো ${config.visitDurationSeconds} সেকেন্ড সাইটে অবস্থান করতে হবে।"))
         }
 
-        if (targetCampaign != null) {
-            _campaigns.update { list ->
-                list.map { cmp ->
-                    if (cmp.id == targetCampaign.id) {
-                        val newCompleted = cmp.completedViews + 1
-                        val newStatus = if (newCompleted >= cmp.targetViews) CampaignStatus.COMPLETED else cmp.status
-                        cmp.copy(completedViews = newCompleted, status = newStatus)
-                    } else cmp
-                }
+        // 3. Daily limit validation
+        val countFlow = when (cleanNetwork) {
+            "adstra" -> _adstraCount
+            "blogger" -> _bloggerCount
+            "monetag" -> _monetagCount
+            else -> _adstraCount
+        }
+
+        if (countFlow.value >= config.dailyLimit) {
+            return Result.failure(IllegalStateException("দৈনিক লিমিট (${config.dailyLimit}/${config.dailyLimit}) শেষ হয়েছে।"))
+        }
+
+        countFlow.value += 1
+        prefs.edit().putInt("${cleanNetwork}_visit_count", countFlow.value).apply()
+
+        // 4. Update visits since break & trigger break timer if breakFrequency reached
+        val visitsSinceBreakFlow = when (cleanNetwork) {
+            "adstra" -> _adstraVisitsSinceBreak
+            "blogger" -> _bloggerVisitsSinceBreak
+            "monetag" -> _monetagVisitsSinceBreak
+            else -> _adstraVisitsSinceBreak
+        }
+        visitsSinceBreakFlow.value += 1
+        prefs.edit().putInt("${cleanNetwork}_visits_since_break", visitsSinceBreakFlow.value).apply()
+
+        if (config.breakFrequency > 0 && visitsSinceBreakFlow.value >= config.breakFrequency && config.breakDurationMinutes > 0) {
+            val breakUntilMillis = System.currentTimeMillis() + (config.breakDurationMinutes * 60 * 1000L)
+            when (cleanNetwork) {
+                "adstra" -> _adstraBreakUntil.value = breakUntilMillis
+                "blogger" -> _bloggerBreakUntil.value = breakUntilMillis
+                "monetag" -> _monetagBreakUntil.value = breakUntilMillis
             }
+            prefs.edit().putLong("${cleanNetwork}_break_until", breakUntilMillis).apply()
+            visitsSinceBreakFlow.value = 0
+            prefs.edit().putInt("${cleanNetwork}_visits_since_break", 0).apply()
         }
 
+        // 5. Update user campaign completion in Firebase
+        if (campaignId != null) {
+            val allCamps = _allCampaigns.value
+            val targetMap = allCamps.firstOrNull { it["id"] == campaignId }
+            val curCompleted = (targetMap?.get("completedViews") as? Number)?.toInt() ?: 0
+            val targetViews = (targetMap?.get("targetViews") as? Number)?.toInt() ?: 100
+            val newCompleted = curCompleted + 1
+            val newStatus = if (newCompleted >= targetViews) "COMPLETED" else "RUNNING"
+            com.example.data.FirebaseRealtimeDbManager.updateCampaignViews(campaignId, newCompleted, newStatus)
+        }
+
+        // 6. Update Admin Direct Link views in Firebase
+        if (adminLinkId != null) {
+            com.example.data.FirebaseRealtimeDbManager.incrementAdminLinkViews(adminLinkId)
+        }
+
+        // 7. Credit reward points to wallet
+        val rewardAmount = config.rewardPoints
         val txnId = generateTxnId()
         val newTxn = Transaction(
             id = UUID.randomUUID().toString(),
@@ -141,21 +315,53 @@ class AppRepository private constructor(context: Context) {
             timeFormatted = getCurrentTimeFormatted(),
             transactionId = txnId,
             status = TransactionStatus.COMPLETED,
-            note = "$networkType visit completed"
+            note = "${config.displayName} visit completed (${config.visitDurationSeconds}s)"
         )
 
         _walletState.update { current ->
-            current.copy(
-                balance = current.balance + rewardAmount
-            )
+            current.copy(balance = current.balance + rewardAmount)
         }
 
         _transactions.update { current ->
             listOf(newTxn) + current
         }
 
+        if (_userProfile.value.id.isNotBlank()) {
+            com.example.data.FirebaseRealtimeDbManager.syncUserWallet(
+                _userProfile.value.id,
+                _walletState.value.balance,
+                _walletState.value.totalDeposit,
+                _walletState.value.totalWithdrawal,
+                _walletState.value.totalReferralEarnings
+            )
+            val txnMap = mapOf(
+                "id" to newTxn.id,
+                "title" to newTxn.title,
+                "type" to newTxn.type.name,
+                "amount" to newTxn.amount,
+                "dateFormatted" to newTxn.dateFormatted,
+                "timeFormatted" to newTxn.timeFormatted,
+                "transactionId" to newTxn.transactionId,
+                "status" to newTxn.status.name,
+                "note" to newTxn.note
+            )
+            com.example.data.FirebaseRealtimeDbManager.pushUserTransaction(_userProfile.value.id, txnMap)
+        }
+
         return Result.success(rewardAmount)
     }
+
+    // Overload for backward compatibility
+    fun completeVisitEarn(networkType: String, rewardAmount: Double = 25.0, campaignId: String? = null): Result<Double> {
+        val config = _adwardSettings.value.getConfigForNetwork(networkType)
+        return completeVisitEarn(
+            networkType = networkType,
+            elapsedSeconds = config.visitDurationSeconds,
+            campaignId = campaignId,
+            adminLinkId = null
+        )
+    }
+
 
     private val _userProfile = MutableStateFlow(UserProfile(isLoggedIn = false))
     val userProfile: StateFlow<UserProfile> = _userProfile.asStateFlow()
@@ -238,6 +444,9 @@ class AppRepository private constructor(context: Context) {
     private val _onlineUsersMax = MutableStateFlow(prefs.getInt("online_users_max", 1000))
     val onlineUsersMax: StateFlow<Int> = _onlineUsersMax.asStateFlow()
 
+    private val _ownerPin = MutableStateFlow(prefs.getString("owner_pin", "1234") ?: "1234")
+    val ownerPin: StateFlow<String> = _ownerPin.asStateFlow()
+
     private val _paidPackages = MutableStateFlow<List<PaidPackage>>(getDefaultPaidPackages())
     val paidPackages: StateFlow<List<PaidPackage>> = _paidPackages.asStateFlow()
 
@@ -266,6 +475,7 @@ class AppRepository private constructor(context: Context) {
     private var activeChatUserId: String? = null
 
     init {
+        com.example.data.FirebaseRealtimeDbManager.init(context)
         loadSavedSession()
         listenToAdminSettings()
     }
@@ -331,6 +541,12 @@ class AppRepository private constructor(context: Context) {
             if (maxUsers != null && maxUsers > 0) {
                 _onlineUsersMax.value = maxUsers
                 prefs.edit().putInt("online_users_max", maxUsers).apply()
+            }
+
+            val pin = adminData["owner_pin"] as? String ?: (adminData["owner_pin"] as? Number)?.toString()
+            if (!pin.isNullOrBlank()) {
+                _ownerPin.value = pin.trim()
+                prefs.edit().putString("owner_pin", pin.trim()).apply()
             }
         }
         
@@ -483,6 +699,116 @@ class AppRepository private constructor(context: Context) {
                 )
             }
         }
+
+        com.example.data.FirebaseRealtimeDbManager.attachAdwardSettingsListener { aData ->
+            if (aData.isNotEmpty()) {
+                val adstra = parseNetworkTaskConfig(aData["adstra"] as? Map<*, *>, "adstra", "Adsterra", 15, 25.0, 10, 5, 50)
+                val blogger = parseNetworkTaskConfig(aData["blogger"] as? Map<*, *>, "blogger", "Blogger", 20, 20.0, 10, 10, 50)
+                val monetag = parseNetworkTaskConfig(aData["monetag"] as? Map<*, *>, "monetag", "Monetag", 30, 30.0, 10, 15, 50)
+                _adwardSettings.value = AdwardSettings(
+                    adstraConfig = adstra,
+                    bloggerConfig = blogger,
+                    monetagConfig = monetag
+                )
+            }
+        }
+
+        com.example.data.FirebaseRealtimeDbManager.attachAdminDirectLinksListener { linksMap ->
+            val list = linksMap.values.filterIsInstance<Map<String, Any?>>().mapNotNull { parseAdminDirectLink(it) }.sortedByDescending { it.timestamp }
+            _adminDirectLinks.value = list
+        }
+    }
+
+    private fun parseNetworkTaskConfig(
+        map: Map<*, *>?,
+        defaultId: String,
+        defaultName: String,
+        defaultDur: Int,
+        defaultReward: Double,
+        defaultBreakFreq: Int,
+        defaultBreakDur: Int,
+        defaultLimit: Int
+    ): NetworkTaskConfig {
+        if (map == null) return NetworkTaskConfig(defaultId, defaultName, defaultDur, defaultReward, defaultBreakFreq, defaultBreakDur, defaultLimit)
+        val visitDurationSeconds = (map["visitDurationSeconds"] as? Number)?.toInt() ?: defaultDur
+        val rewardPoints = (map["rewardPoints"] as? Number)?.toDouble() ?: defaultReward
+        val breakFrequency = (map["breakFrequency"] as? Number)?.toInt() ?: defaultBreakFreq
+        val breakDurationMinutes = (map["breakDurationMinutes"] as? Number)?.toInt() ?: defaultBreakDur
+        val dailyLimit = (map["dailyLimit"] as? Number)?.toInt() ?: defaultLimit
+        return NetworkTaskConfig(
+            networkId = defaultId,
+            displayName = defaultName,
+            visitDurationSeconds = visitDurationSeconds,
+            rewardPoints = rewardPoints,
+            breakFrequency = breakFrequency,
+            breakDurationMinutes = breakDurationMinutes,
+            dailyLimit = dailyLimit
+        )
+    }
+
+    private fun parseAdminDirectLink(map: Map<String, Any?>): AdminDirectLink? {
+        val id = map["id"] as? String ?: return null
+        val title = map["title"] as? String ?: "Sponsored Direct Link"
+        val url = map["url"] as? String ?: return null
+        val networkType = map["networkType"] as? String ?: "all"
+        val frequency = (map["frequency"] as? Number)?.toInt() ?: 10
+        val isActive = map["isActive"] as? Boolean ?: true
+        val viewsServed = (map["viewsServed"] as? Number)?.toInt() ?: 0
+        val createdDate = map["createdDate"] as? String ?: "Today"
+        val timestamp = (map["timestamp"] as? Number)?.toLong() ?: System.currentTimeMillis()
+        return AdminDirectLink(
+            id = id,
+            title = title,
+            url = url,
+            networkType = networkType,
+            frequency = frequency,
+            isActive = isActive,
+            viewsServed = viewsServed,
+            createdDate = createdDate,
+            timestamp = timestamp
+        )
+    }
+
+    fun updateNetworkTaskConfig(
+        networkId: String,
+        visitDurationSeconds: Int,
+        rewardPoints: Double,
+        breakFrequency: Int,
+        breakDurationMinutes: Int,
+        dailyLimit: Int
+    ) {
+        val map = mapOf(
+            "networkId" to networkId,
+            "visitDurationSeconds" to visitDurationSeconds,
+            "rewardPoints" to rewardPoints,
+            "breakFrequency" to breakFrequency,
+            "breakDurationMinutes" to breakDurationMinutes,
+            "dailyLimit" to dailyLimit
+        )
+        com.example.data.FirebaseRealtimeDbManager.updateNetworkTaskConfig(networkId, map)
+    }
+
+    fun saveAdminDirectLink(link: AdminDirectLink) {
+        val linkMap = mapOf(
+            "id" to if (link.id.isBlank()) UUID.randomUUID().toString() else link.id,
+            "title" to link.title.trim(),
+            "url" to link.url.trim(),
+            "networkType" to link.networkType,
+            "frequency" to link.frequency,
+            "isActive" to link.isActive,
+            "viewsServed" to link.viewsServed,
+            "createdDate" to link.createdDate,
+            "timestamp" to link.timestamp
+        )
+        com.example.data.FirebaseRealtimeDbManager.saveAdminDirectLink(linkMap)
+    }
+
+    fun deleteAdminDirectLink(linkId: String) {
+        com.example.data.FirebaseRealtimeDbManager.deleteAdminDirectLink(linkId)
+    }
+
+    fun toggleAdminDirectLinkActive(linkId: String, isActive: Boolean) {
+        com.example.data.FirebaseRealtimeDbManager.toggleAdminDirectLinkActive(linkId, isActive)
     }
 
     private fun parseServiceItem(map: Map<*, *>?, defaultKey: String, defaultName: String): ServiceItemConfig {
@@ -623,6 +949,8 @@ class AppRepository private constructor(context: Context) {
             }
         }
         val createdDate = data["createdDate"] as? String ?: "Today"
+        val userId = data["userId"] as? String ?: ""
+        val timestamp = (data["timestamp"] as? Number)?.toLong() ?: System.currentTimeMillis()
         return Campaign(
             id = id,
             title = title,
@@ -632,7 +960,9 @@ class AppRepository private constructor(context: Context) {
             targetViews = targetViews,
             completedViews = completedViews,
             status = status,
-            createdDate = createdDate
+            createdDate = createdDate,
+            userId = userId,
+            timestamp = timestamp
         )
     }
 
@@ -702,6 +1032,7 @@ class AppRepository private constructor(context: Context) {
             val totalRef = (data["totalReferralEarnings"] as? Number)?.toDouble()
             val appliedRef = data["appliedReferralCode"] as? String
             val roleFromDb = data["role"] as? String
+            val adminPin = (data["adminPin"] as? String) ?: (data["adminPin"] as? Number)?.toString() ?: ""
             val permissionsMap = data["permissions"] as? Map<String, Any?>
             val parsedPermissions = permissionsMap?.mapValues { it.value == true || it.value.toString() == "true" } ?: emptyMap()
 
@@ -714,7 +1045,8 @@ class AppRepository private constructor(context: Context) {
                 val finalRole = if (current.email == "d@gmail.com") "OWNER" else (roleFromDb ?: current.role)
                 current.copy(
                     role = finalRole,
-                    permissions = parsedPermissions
+                    permissions = parsedPermissions,
+                    adminPin = adminPin
                 )
             }
 
@@ -765,6 +1097,7 @@ class AppRepository private constructor(context: Context) {
         val savedAppliedReferral = prefs.getString("user_applied_referral", null)
         val savedBalance = prefs.getFloat("user_balance", -1f)
         val savedRole = prefs.getString("user_role", "USER") ?: "USER"
+        val savedAdminPin = prefs.getString("user_admin_pin", "") ?: ""
 
         if (!savedUserId.isNullOrBlank() && !savedFullName.isNullOrBlank()) {
             val phone = if (savedContactType == "phone") savedContact ?: "" else ""
@@ -783,6 +1116,7 @@ class AppRepository private constructor(context: Context) {
                 referralCode = savedReferral ?: "PAY${savedUserId.takeLast(4)}",
                 appliedReferralCode = savedAppliedReferral,
                 role = if (email == "d@gmail.com") "OWNER" else savedRole,
+                adminPin = savedAdminPin,
                 isLoggedIn = true
             )
             _isLoggedIn.value = true
@@ -790,6 +1124,19 @@ class AppRepository private constructor(context: Context) {
             if (savedBalance >= 0f) {
                 _walletState.update { it.copy(balance = savedBalance.toDouble()) }
             }
+
+            // Restore visit counts and break timestamps
+            _adstraCount.value = prefs.getInt("adstra_visit_count", 0)
+            _bloggerCount.value = prefs.getInt("blogger_visit_count", 0)
+            _monetagCount.value = prefs.getInt("monetag_visit_count", 0)
+
+            _adstraBreakUntil.value = prefs.getLong("adstra_break_until", 0L)
+            _bloggerBreakUntil.value = prefs.getLong("blogger_break_until", 0L)
+            _monetagBreakUntil.value = prefs.getLong("monetag_break_until", 0L)
+
+            _adstraVisitsSinceBreak.value = prefs.getInt("adstra_visits_since_break", 0)
+            _bloggerVisitsSinceBreak.value = prefs.getInt("blogger_visits_since_break", 0)
+            _monetagVisitsSinceBreak.value = prefs.getInt("monetag_visits_since_break", 0)
 
             attachUserListeners(savedUserId)
         }
@@ -983,6 +1330,7 @@ class AppRepository private constructor(context: Context) {
                 val totalRef = (userData["totalReferralEarnings"] as? Number)?.toDouble() ?: 0.0
                 val roleFromDb = userData["role"] as? String ?: "USER"
                 val finalRole = if (email == "d@gmail.com") "OWNER" else roleFromDb
+                val adminPin = (userData["adminPin"] as? String) ?: (userData["adminPin"] as? Number)?.toString() ?: ""
                 val permissionsMap = userData["permissions"] as? Map<String, Any?>
                 val parsedPermissions = permissionsMap?.mapValues { it.value == true || it.value.toString() == "true" } ?: emptyMap()
 
@@ -997,6 +1345,7 @@ class AppRepository private constructor(context: Context) {
                     .putString("user_applied_referral", appliedRef)
                     .putFloat("user_balance", balance.toFloat())
                     .putString("user_role", finalRole)
+                    .putString("user_admin_pin", adminPin)
                     .apply()
 
                 _userProfile.value = UserProfile(
@@ -1013,6 +1362,7 @@ class AppRepository private constructor(context: Context) {
                     appliedReferralCode = appliedRef,
                     role = finalRole,
                     permissions = parsedPermissions,
+                    adminPin = adminPin,
                     isLoggedIn = true
                 )
 
@@ -1148,8 +1498,8 @@ class AppRepository private constructor(context: Context) {
         com.example.data.FirebaseRealtimeDbManager.updateUserBlockStatus(userId, isBlocked)
     }
 
-    fun updateUserAdmin(userId: String, name: String, email: String, balance: Double) {
-        com.example.data.FirebaseRealtimeDbManager.updateUser(userId, name, email, balance)
+    fun updateUserAdmin(userId: String, name: String, email: String, balance: Double, pin: String? = null) {
+        com.example.data.FirebaseRealtimeDbManager.updateUserAdmin(userId, name, email, balance, pin)
     }
 
     fun deleteUserAdmin(userId: String) {
@@ -1569,6 +1919,7 @@ class AppRepository private constructor(context: Context) {
             else -> "adstra"
         }
 
+        val currentUserId = _userProfile.value.id
         val newCampaign = Campaign(
             id = UUID.randomUUID().toString(),
             title = title.trim(),
@@ -1578,7 +1929,9 @@ class AppRepository private constructor(context: Context) {
             targetViews = pkg.targetViews,
             completedViews = 0,
             status = CampaignStatus.PENDING,
-            createdDate = "Today"
+            createdDate = "Today",
+            userId = currentUserId,
+            timestamp = System.currentTimeMillis()
         )
 
         val txnId = generateTxnId()
@@ -1619,7 +1972,8 @@ class AppRepository private constructor(context: Context) {
             "completedViews" to newCampaign.completedViews,
             "status" to newCampaign.status.name,
             "createdDate" to newCampaign.createdDate,
-            "userId" to _userProfile.value.id
+            "userId" to currentUserId,
+            "timestamp" to newCampaign.timestamp
         )
         com.example.data.FirebaseRealtimeDbManager.pushCampaignToDb(_userProfile.value.id, campaignMap)
         
@@ -1749,6 +2103,19 @@ class AppRepository private constructor(context: Context) {
 
     fun updateUserAdminPermissions(userId: String, permissions: Map<String, Boolean>) {
         com.example.data.FirebaseRealtimeDbManager.updateUserAdminPermissions(userId, permissions)
+    }
+
+    fun updateUserAdminPin(userId: String, pin: String) {
+        com.example.data.FirebaseRealtimeDbManager.updateUserAdminPin(userId, pin.trim())
+    }
+
+    fun updateOwnerPin(pin: String) {
+        val cleanPin = pin.trim()
+        if (cleanPin.isNotBlank()) {
+            _ownerPin.value = cleanPin
+            prefs.edit().putString("owner_pin", cleanPin).apply()
+            com.example.data.FirebaseRealtimeDbManager.updateOwnerPin(cleanPin)
+        }
     }
 
     fun removeAdminAccess(userId: String) {

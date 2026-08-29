@@ -35,6 +35,8 @@ fun AdminSettingsScreen(
 
     val allSubMenuItems = listOf(
         Triple("general", "General Settings", Icons.Default.Tune),
+        Triple("adward_settings", "Task & Break Timers (টাস্ক ও বিরতি)", Icons.Default.Timer),
+        Triple("admin_links", "Sponsored Direct Links (স্পন্সর লিংক)", Icons.Default.Link),
         Triple("services", "Service Status (সার্ভিস বন্ধ)", Icons.Default.PowerSettingsNew),
         Triple("maintenance", "Maintenance Mode (মেইনটেনেন্স)", Icons.Default.Engineering),
         Triple("support", "Support Center", Icons.Default.HeadsetMic),
@@ -46,6 +48,8 @@ fun AdminSettingsScreen(
         allSubMenuItems.filter { (key, _, _) ->
             when (key) {
                 "general" -> userProfile.hasPermission("general_settings")
+                "adward_settings" -> userProfile.hasPermission("adward_settings")
+                "admin_links" -> userProfile.hasPermission("admin_links")
                 "services" -> userProfile.hasPermission("service_control")
                 "maintenance" -> userProfile.hasPermission("maintenance_mode")
                 "support" -> userProfile.hasPermission("support_center")
@@ -147,6 +151,8 @@ fun AdminSettingsScreen(
         Box(modifier = Modifier.weight(1f)) {
             when (selectedSubMenu) {
                 "general" -> AdminGeneralSettingsContent(repository = repository)
+                "adward_settings" -> AdminAdwardSettingsSection(repository = repository)
+                "admin_links" -> AdminDirectLinksSection(repository = repository)
                 "services" -> AdminServiceControlScreen(repository = repository)
                 "maintenance" -> AdminMaintenanceScreen(repository = repository)
                 "support" -> AdminLiveSupportScreen(repository = repository)
@@ -163,10 +169,16 @@ private fun AdminGeneralSettingsContent(repository: AppRepository) {
     val campaignRates by repository.campaignRates.collectAsState()
     val onlineUsersMin by repository.onlineUsersMin.collectAsState()
     val onlineUsersMax by repository.onlineUsersMax.collectAsState()
+    val ownerPin by repository.ownerPin.collectAsState()
 
     var minUsersInput by remember(onlineUsersMin) { mutableStateOf(onlineUsersMin.toString()) }
     var maxUsersInput by remember(onlineUsersMax) { mutableStateOf(onlineUsersMax.toString()) }
     var onlineRangeSuccessMessage by remember { mutableStateOf<String?>(null) }
+
+    var newOwnerPinInput by remember(ownerPin) { mutableStateOf(ownerPin) }
+    var isOwnerPinVisible by remember { mutableStateOf(false) }
+    var ownerPinSuccessMessage by remember { mutableStateOf<String?>(null) }
+    var ownerPinErrorMessage by remember { mutableStateOf<String?>(null) }
 
     Column(
         modifier = Modifier
@@ -175,6 +187,113 @@ private fun AdminGeneralSettingsContent(repository: AppRepository) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Owner Security PIN Section
+        Text(
+            text = "Owner Panel Security PIN (ওনার পিন)",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .shadow(4.dp, RoundedCornerShape(16.dp)),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.VpnKey,
+                        contentDescription = null,
+                        tint = PurplePrimary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Column {
+                        Text(
+                            text = "Main Owner Access PIN",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "ওনার ও অ্যাডমিন প্যানেলে প্রবেশের মূল মাস্টার পিন কোড। ডিফল্ট: 1234",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = newOwnerPinInput,
+                    onValueChange = {
+                        if (it.length <= 6 && it.all { char -> char.isDigit() }) {
+                            newOwnerPinInput = it
+                            ownerPinErrorMessage = null
+                            ownerPinSuccessMessage = null
+                        }
+                    },
+                    label = { Text("Enter New Owner PIN (4-6 digits)") },
+                    singleLine = true,
+                    isError = ownerPinErrorMessage != null,
+                    supportingText = {
+                        if (ownerPinErrorMessage != null) {
+                            Text(ownerPinErrorMessage ?: "", color = com.example.ui.theme.ErrorRed)
+                        } else if (ownerPinSuccessMessage != null) {
+                            Text(ownerPinSuccessMessage ?: "", color = com.example.ui.theme.SuccessGreen)
+                        } else {
+                            Text("Current active PIN: $ownerPin", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    },
+                    leadingIcon = {
+                        Icon(Icons.Default.Lock, contentDescription = null, tint = PurplePrimary)
+                    },
+                    trailingIcon = {
+                        IconButton(onClick = { isOwnerPinVisible = !isOwnerPinVisible }) {
+                            Icon(
+                                imageVector = if (isOwnerPinVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                contentDescription = "Toggle PIN Visibility",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    visualTransformation = if (isOwnerPinVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Button(
+                    onClick = {
+                        if (newOwnerPinInput.length < 4) {
+                            ownerPinErrorMessage = "PIN অবশ্যই ন্যূনতম ৪ সংখ্যার হতে হবে।"
+                            ownerPinSuccessMessage = null
+                            return@Button
+                        }
+                        repository.updateOwnerPin(newOwnerPinInput)
+                        ownerPinSuccessMessage = "ওনার পিন সফলভাবে আপডেট করা হয়েছে! নতুন পিন: $newOwnerPinInput"
+                        ownerPinErrorMessage = null
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Update Owner PIN (পিন পরিবর্তন করুন)")
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
         // Campaign Rates Section
         Text(
             text = "Campaign Point Rates (per 100 views)",

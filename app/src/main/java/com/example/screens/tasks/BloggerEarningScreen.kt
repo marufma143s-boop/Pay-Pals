@@ -5,46 +5,15 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Article
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.MenuBook
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,24 +43,40 @@ fun BloggerEarningScreen(
 ) {
     val context = LocalContext.current
     val count by repository.bloggerCount.collectAsState()
-    val limit = repository.bloggerLimit
-    val walletState by repository.walletState.collectAsState()
+    val adwardSettings by repository.adwardSettings.collectAsState()
+    val config = adwardSettings.bloggerConfig
+    val limit = config.dailyLimit
     val preferredBrowser by repository.preferredBrowser.collectAsState()
+    val bloggerBreakUntil by repository.bloggerBreakUntil.collectAsState()
 
     var isVisitingInProgress by remember { mutableStateOf(false) }
-    var secondsRemaining by remember { mutableIntStateOf(15) }
+    var secondsRemaining by remember { mutableIntStateOf(config.visitDurationSeconds) }
     var canClaimReward by remember { mutableStateOf(false) }
     var showSuccessDialog by remember { mutableStateOf(false) }
     var rewardEarned by remember { mutableStateOf(0.0) }
-    val isLimitReached = count >= limit
+    var visitStartTime by remember { mutableLongStateOf(0L) }
+    var earlyExitWarning by remember { mutableStateOf<String?>(null) }
+    var breakRemainingSec by remember { mutableLongStateOf(repository.getBreakRemainingSeconds("blogger")) }
 
-    val activeCampaign = remember(isVisitingInProgress) { repository.getActiveCampaignForNetwork("blogger") }
-    val targetUrl = remember(isVisitingInProgress) { repository.getTargetUrlForNetwork("blogger") }
+    val isLimitReached = count >= limit
+    val isOnBreak = breakRemainingSec > 0L
+
+    // Live break countdown timer
+    LaunchedEffect(bloggerBreakUntil) {
+        while (true) {
+            val rem = repository.getBreakRemainingSeconds("blogger")
+            breakRemainingSec = rem
+            if (rem <= 0L) break
+            delay(1000L)
+        }
+    }
+
+    val targetInfo = remember(isVisitingInProgress, count) { repository.getTargetLinkForVisit("blogger") }
 
     // Countdown Timer for Article Reading
     LaunchedEffect(isVisitingInProgress) {
         if (isVisitingInProgress) {
-            secondsRemaining = 15
+            secondsRemaining = config.visitDurationSeconds
             canClaimReward = false
             while (secondsRemaining > 0) {
                 delay(1000L)
@@ -105,22 +90,39 @@ fun BloggerEarningScreen(
     val browserIcon = if (preferredBrowser.equals("firefox", ignoreCase = true)) "🦊" else "🌐"
 
     fun startReading() {
-        if (isLimitReached) return
+        if (isLimitReached || isOnBreak) return
+        earlyExitWarning = null
+        visitStartTime = System.currentTimeMillis()
         isVisitingInProgress = true
         CustomTabsHelper.openCustomTab(
             context = context,
-            url = targetUrl,
+            url = targetInfo.url,
             preferredBrowser = preferredBrowser
         )
     }
 
     fun claimReward() {
-        val res = repository.completeVisitEarn("Blogger", rewardAmount = 20.0)
+        val elapsedSec = ((System.currentTimeMillis() - visitStartTime) / 1000).toInt()
+        if (elapsedSec < config.visitDurationSeconds) {
+            earlyExitWarning = "⚠️ ভিজিট সম্পূর্ণ হয়নি! আপনি মাত্র ${elapsedSec} সেকেন্ড সাইটে ছিলেন। পয়েন্ট পাওয়ার জন্য পুরো ${config.visitDurationSeconds} সেকেন্ড সাইটে অবস্থান করতে হবে।"
+            return
+        }
+
+        val res = repository.completeVisitEarn(
+            networkType = "blogger",
+            elapsedSeconds = elapsedSec,
+            campaignId = targetInfo.campaignId,
+            adminLinkId = targetInfo.adminLinkId
+        )
+
         if (res.isSuccess) {
-            rewardEarned = res.getOrNull() ?: 20.0
+            rewardEarned = res.getOrNull() ?: config.rewardPoints
             isVisitingInProgress = false
             canClaimReward = false
+            earlyExitWarning = null
             showSuccessDialog = true
+        } else {
+            earlyExitWarning = res.exceptionOrNull()?.message ?: "কাজ সম্পন্ন করা যায়নি।"
         }
     }
 
@@ -145,7 +147,7 @@ fun BloggerEarningScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .shadow(10.dp, RoundedCornerShape(22.dp), spotColor = PurplePrimary),
+                    .shadow(10.dp, RoundedCornerShape(22.dp), spotColor = Color(0xFF00897B)),
                 shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
@@ -155,15 +157,15 @@ fun BloggerEarningScreen(
                         .background(
                             Brush.linearGradient(
                                 listOf(
-                                    Color(0xFF1E88E5).copy(alpha = 0.25f),
-                                    PurplePrimary.copy(alpha = 0.2f),
-                                    Color(0xFF0D253A)
+                                    Color(0xFF00897B).copy(alpha = 0.25f),
+                                    Color(0xFF004D40).copy(alpha = 0.3f),
+                                    Color(0xFF0B1E1A)
                                 )
                             )
                         )
                         .border(
                             1.dp,
-                            Brush.horizontalGradient(listOf(Color(0xFF29B6F6), PurpleNeon)),
+                            Brush.horizontalGradient(listOf(Color(0xFF26A69A), Color(0xFF80CBC4))),
                             RoundedCornerShape(22.dp)
                         )
                         .padding(20.dp)
@@ -184,7 +186,7 @@ fun BloggerEarningScreen(
                                         .clip(CircleShape)
                                         .background(
                                             Brush.linearGradient(
-                                                listOf(Color(0xFF1E88E5), Color(0xFF29B6F6))
+                                                listOf(Color(0xFF00897B), Color(0xFF26A69A))
                                             )
                                         ),
                                     contentAlignment = Alignment.Center
@@ -205,7 +207,7 @@ fun BloggerEarningScreen(
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        text = "Articles & Content Reading",
+                                        text = "Read Articles for ${config.visitDurationSeconds}s",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -218,7 +220,7 @@ fun BloggerEarningScreen(
                                 border = androidx.compose.foundation.BorderStroke(1.dp, GoldAccent.copy(alpha = 0.6f))
                             ) {
                                 Text(
-                                    text = "🪙 20 Credits",
+                                    text = "🪙 ${config.rewardPoints.toInt()} Credits",
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = GoldAccent,
@@ -248,9 +250,9 @@ fun BloggerEarningScreen(
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    text = if (isLimitReached) "Limit Reached" else "${(count.toFloat() / limit * 100).toInt()}%",
+                                    text = if (isLimitReached) "Limit Reached" else "${(count.toFloat() / limit.coerceAtLeast(1) * 100).toInt()}%",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (isLimitReached) SuccessGreen else PurpleNeon,
+                                    color = if (isLimitReached) SuccessGreen else Color(0xFF26A69A),
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -264,17 +266,99 @@ fun BloggerEarningScreen(
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .fillMaxWidth((count.toFloat() / limit).coerceIn(0f, 1f))
+                                        .fillMaxWidth((count.toFloat() / limit.coerceAtLeast(1)).coerceIn(0f, 1f))
                                         .height(8.dp)
                                         .clip(RoundedCornerShape(4.dp))
                                         .background(
                                             Brush.horizontalGradient(
-                                                listOf(Color(0xFF29B6F6), PurpleNeon)
+                                                listOf(Color(0xFF00897B), Color(0xFF26A69A))
                                             )
                                         )
                                 )
                             }
                         }
+                    }
+                }
+            }
+
+            // Break Timer Card if Active
+            if (isOnBreak) {
+                val mins = breakRemainingSec / 60
+                val secs = breakRemainingSec % 60
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)),
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.error)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.error.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.HourglassTop,
+                                contentDescription = "Break Active",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column {
+                            Text(
+                                text = "🛑 বিরতি চলছে (Break Active)",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Text(
+                                text = "প্রতি ${config.breakFrequency} টি ভিজিট পর ${config.breakDurationMinutes} মিনিট বিরতি প্রযোজ্য।",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "বাকি সময়: ${String.format("%02d:%02d", mins, secs)} মিনিট",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Early exit warning alert
+            if (earlyExitWarning != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = earlyExitWarning ?: "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
                 }
             }
@@ -296,7 +380,7 @@ fun BloggerEarningScreen(
                         Text(text = browserIcon, fontSize = 16.sp)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Custom Tab Browser: $browserName",
+                            text = "Browser: $browserName",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Medium
@@ -305,13 +389,13 @@ fun BloggerEarningScreen(
                     Text(
                         text = "Active",
                         style = MaterialTheme.typography.labelSmall,
-                        color = PurpleNeon,
+                        color = Color(0xFF26A69A),
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
 
-            // Active Reading State / Countdown Card
+            // Active Visit State / Countdown Card
             AnimatedVisibility(
                 visible = isVisitingInProgress,
                 enter = fadeIn(),
@@ -320,10 +404,10 @@ fun BloggerEarningScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .shadow(8.dp, RoundedCornerShape(20.dp), spotColor = PurpleNeon),
+                        .shadow(8.dp, RoundedCornerShape(20.dp), spotColor = Color(0xFF00897B)),
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = androidx.compose.foundation.BorderStroke(1.5.dp, PurpleNeon)
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF00897B))
                 ) {
                     Column(
                         modifier = Modifier
@@ -338,9 +422,9 @@ fun BloggerEarningScreen(
                         ) {
                             if (!canClaimReward) {
                                 CircularProgressIndicator(
-                                    progress = { (15 - secondsRemaining) / 15f },
+                                    progress = { ((config.visitDurationSeconds - secondsRemaining).toFloat() / config.visitDurationSeconds.coerceAtLeast(1)).coerceIn(0f, 1f) },
                                     modifier = Modifier.size(32.dp),
-                                    color = PurpleNeon,
+                                    color = Color(0xFF00897B),
                                     strokeCap = StrokeCap.Round
                                 )
                             } else {
@@ -354,13 +438,13 @@ fun BloggerEarningScreen(
 
                             Column {
                                 Text(
-                                    text = if (!canClaimReward) "Reading In Progress ($secondsRemaining s)" else "Article Reading Completed!",
+                                    text = if (!canClaimReward) "Reading Article (${secondsRemaining}s)" else "Article Reading Completed!",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = if (!canClaimReward) MaterialTheme.colorScheme.onSurface else SuccessGreen
                                 )
                                 Text(
-                                    text = if (!canClaimReward) "Stay on the blog page until the timer finishes" else "Your 🪙 20 Credits reward is ready to claim",
+                                    text = if (!canClaimReward) "Stay on the blog until countdown finishes" else "🪙 ${config.rewardPoints.toInt()} Credits ready to claim",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -375,7 +459,7 @@ fun BloggerEarningScreen(
                                 onClick = {
                                     CustomTabsHelper.openCustomTab(
                                         context = context,
-                                        url = targetUrl,
+                                        url = targetInfo.url,
                                         preferredBrowser = preferredBrowser
                                     )
                                 },
@@ -384,7 +468,7 @@ fun BloggerEarningScreen(
                             ) {
                                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Reopen Blog", style = MaterialTheme.typography.labelSmall)
+                                Text("Reopen Article", style = MaterialTheme.typography.labelSmall)
                             }
 
                             Button(
@@ -397,7 +481,7 @@ fun BloggerEarningScreen(
                                 )
                             ) {
                                 Text(
-                                    text = if (canClaimReward) "Claim 🪙 20 Credits" else "Waiting (${secondsRemaining}s)",
+                                    text = if (canClaimReward) "Claim 🪙 ${config.rewardPoints.toInt()}" else "Reading (${secondsRemaining}s)",
                                     fontWeight = FontWeight.Bold,
                                     style = MaterialTheme.typography.labelMedium
                                 )
@@ -407,7 +491,7 @@ fun BloggerEarningScreen(
                 }
             }
 
-            // Interactive Article Starter Card
+            // Interactive Article Reader Starter Card
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -426,19 +510,19 @@ fun BloggerEarningScreen(
                         modifier = Modifier
                             .size(64.dp)
                             .clip(CircleShape)
-                            .background(PurplePrimary.copy(alpha = 0.2f)),
+                            .background(Color(0xFF00897B).copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = if (isLimitReached) Icons.Filled.CheckCircle else Icons.Filled.Article,
+                            imageVector = if (isLimitReached) Icons.Filled.CheckCircle else if (isOnBreak) Icons.Default.HourglassTop else Icons.Filled.Article,
                             contentDescription = null,
-                            tint = if (isLimitReached) SuccessGreen else Color(0xFF29B6F6),
+                            tint = if (isLimitReached) SuccessGreen else if (isOnBreak) MaterialTheme.colorScheme.error else Color(0xFF00897B),
                             modifier = Modifier.size(34.dp)
                         )
                     }
 
                     Text(
-                        text = if (isLimitReached) "All Today's Articles Completed!" else "Read Blog & Earn",
+                        text = if (isLimitReached) "All Today's Articles Read!" else if (isOnBreak) "Break Time Active" else "Read Sponsored Blog Post",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -446,19 +530,21 @@ fun BloggerEarningScreen(
 
                     Text(
                         text = if (isLimitReached)
-                            "You have reached today's limit ($limit/$limit). Come back tomorrow for new articles!"
+                            "You have reached today's limit ($limit/$limit). Come back tomorrow for more rewards!"
+                        else if (isOnBreak)
+                            "Please wait for the break timer to expire before starting new articles."
                         else
-                            "Read sponsored blog content in $browserName Custom Tab for 15 seconds to earn 🪙 20 Credits deposited directly to your wallet.",
+                            "Click below to read article for ${config.visitDurationSeconds} seconds. 🪙 ${config.rewardPoints.toInt()} Credits will be credited instantly upon verification.",
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 18.sp
                     )
 
-                    if (activeCampaign != null) {
+                    if (targetInfo.isSponsoredAdminLink) {
                         Surface(
                             shape = RoundedCornerShape(10.dp),
-                            color = Color(0xFF1E88E5).copy(alpha = 0.12f),
+                            color = PurpleNeon.copy(alpha = 0.15f),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -466,16 +552,41 @@ fun BloggerEarningScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    imageVector = Icons.Filled.Article,
+                                    imageVector = Icons.Default.Stars,
                                     contentDescription = null,
-                                    tint = Color(0xFF1E88E5),
+                                    tint = PurpleNeon,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Active Campaign: ${activeCampaign.title}",
+                                    text = "Sponsored: ${targetInfo.title}",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = Color(0xFF29B6F6),
+                                    color = PurpleNeon,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    } else if (targetInfo.campaignId != null) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color(0xFF00897B).copy(alpha = 0.12f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.MenuBook,
+                                    contentDescription = null,
+                                    tint = Color(0xFF00897B),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Verified Campaign: ${targetInfo.title}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFF00897B),
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -484,14 +595,14 @@ fun BloggerEarningScreen(
 
                     Button(
                         onClick = { startReading() },
-                        enabled = !isLimitReached,
+                        enabled = !isLimitReached && !isOnBreak,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp)
                             .testTag("start_blogger_visit_btn"),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF1E88E5)
+                            containerColor = Color(0xFF00897B)
                         )
                     ) {
                         Row(
@@ -506,7 +617,7 @@ fun BloggerEarningScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = if (isLimitReached) "Limit Completed" else "Read & Earn 🪙 20 Credits",
+                                text = if (isLimitReached) "Limit Completed" else if (isOnBreak) "On Break..." else "Read & Earn 🪙 ${config.rewardPoints.toInt()} Credits",
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
@@ -530,19 +641,19 @@ fun BloggerEarningScreen(
                         Icon(
                             imageVector = Icons.Filled.Info,
                             contentDescription = null,
-                            tint = PurpleNeon,
+                            tint = Color(0xFF00897B),
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Rules & Guidelines",
+                            text = "Blogger Rules & Guidelines",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     Text(
-                        text = "• View blog content for 15 seconds in $browserName Custom Tab.\n• The countdown completes smoothly.\n• Credits are added directly to your available balance upon return.",
+                        text = "• Read blog article in $browserName for full ${config.visitDurationSeconds} seconds.\n• Do not exit before countdown completes.\n• Automatic break of ${config.breakDurationMinutes}m triggers every ${config.breakFrequency} visits.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 18.sp
@@ -553,7 +664,7 @@ fun BloggerEarningScreen(
 
         // Success Dialog
         if (showSuccessDialog) {
-            androidx.compose.material3.AlertDialog(
+            AlertDialog(
                 onDismissRequest = { showSuccessDialog = false },
                 icon = {
                     Icon(
@@ -565,14 +676,14 @@ fun BloggerEarningScreen(
                 },
                 title = {
                     Text(
-                        text = "Reading Completed!",
+                        text = "Article Read Completed!",
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center
                     )
                 },
                 text = {
                     Text(
-                        text = "Great job! 🪙 ${rewardEarned.toInt()} Credits have been credited to your balance.",
+                        text = "Great job! 🪙 ${rewardEarned.toInt()} Credits have been credited to your wallet balance.",
                         textAlign = TextAlign.Center,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -580,7 +691,7 @@ fun BloggerEarningScreen(
                 confirmButton = {
                     Button(
                         onClick = { showSuccessDialog = false },
-                        colors = ButtonDefaults.buttonColors(containerColor = PurplePrimary)
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00897B))
                     ) {
                         Text("Continue Earning")
                     }

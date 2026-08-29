@@ -82,12 +82,18 @@ fun LiveChatScreen(
     var isAudioPlaying by remember { mutableStateOf(false) }
     var audioProgress by remember { mutableFloatStateOf(0f) }
 
-    // Setup Chat listener
-    LaunchedEffect(targetUserId) {
-        repository.openChatWithUser(targetUserId)
+    val effectiveUserId = remember(targetUserId, userProfile.id) {
+        if (targetUserId.isNotBlank()) targetUserId else if (userProfile.id.isNotBlank()) userProfile.id else "user_default"
     }
 
-    DisposableEffect(targetUserId) {
+    // Setup Chat listener
+    LaunchedEffect(effectiveUserId) {
+        if (effectiveUserId.isNotBlank()) {
+            repository.openChatWithUser(effectiveUserId)
+        }
+    }
+
+    DisposableEffect(effectiveUserId) {
         onDispose {
             repository.closeChatWithUser()
             AudioRecordingManager.cancelRecording()
@@ -152,7 +158,7 @@ fun LiveChatScreen(
                     onClick = {
                         val msg = messageToDelete
                         if (msg != null) {
-                            repository.deleteSupportChatMessage(targetUserId, msg.id)
+                            repository.deleteSupportChatMessage(effectiveUserId, msg.id)
                         }
                         messageToDelete = null
                     }
@@ -183,7 +189,7 @@ fun LiveChatScreen(
                         ) {
                             Base64OrResourceImage(
                                 base64Str = targetUserAvatar,
-                                placeholderRes = if (isAdminView) R.drawable.img_avatar_maruf_1787554123074 else R.drawable.ic_launcher_foreground,
+                                placeholderRes = if (isAdminView) R.drawable.img_avatar_maruf_1787554123074 else R.drawable.ic_paypulse_logo_1787554101154,
                                 contentDescription = targetUserName,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
@@ -344,7 +350,7 @@ fun LiveChatScreen(
                                         if (result != null) {
                                             val (base64, durationSec) = result
                                             repository.sendSupportChatMessage(
-                                                targetUserId = targetUserId,
+                                                targetUserId = effectiveUserId,
                                                 messageText = "",
                                                 voiceBase64 = base64,
                                                 voiceDurationSeconds = if (durationSec > 0) durationSec else recordingDuration.coerceAtLeast(1),
@@ -431,7 +437,7 @@ fun LiveChatScreen(
                                         val textToSend = messageInput.trim()
                                         messageInput = ""
                                         repository.sendSupportChatMessage(
-                                            targetUserId = targetUserId,
+                                            targetUserId = effectiveUserId,
                                             messageText = textToSend,
                                             voiceBase64 = "",
                                             voiceDurationSeconds = 0,

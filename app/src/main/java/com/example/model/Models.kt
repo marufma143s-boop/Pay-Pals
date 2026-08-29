@@ -58,6 +58,7 @@ data class UserProfile(
     val appliedReferralCode: String? = null,
     val role: String = "USER", // "USER", "ADMIN", "OWNER"
     val permissions: Map<String, Boolean> = emptyMap(),
+    val adminPin: String = "",
     val isLoggedIn: Boolean = false
 ) {
     fun hasPermission(key: String): Boolean {
@@ -105,7 +106,9 @@ data class Campaign(
     val targetViews: Int,
     val completedViews: Int,
     val status: CampaignStatus,
-    val createdDate: String
+    val createdDate: String,
+    val userId: String = "",
+    val timestamp: Long = 0L
 ) {
     val progressPercentage: Int
         get() = if (targetViews > 0) ((completedViews.toDouble() / targetViews) * 100).toInt().coerceIn(0, 100) else 0
@@ -342,5 +345,76 @@ data class PopupNoticeSettings(
     val externalUrl: String = "https://t.me/paypulse",
     val isAdminSubmenuVisible: Boolean = true
 )
+
+data class NetworkTaskConfig(
+    val networkId: String = "adstra", // "adstra", "blogger", "monetag"
+    val displayName: String = "Adsterra",
+    val visitDurationSeconds: Int = 15,
+    val rewardPoints: Double = 25.0,
+    val breakFrequency: Int = 10, // After every X visits trigger a break (0 = disabled)
+    val breakDurationMinutes: Int = 5, // Break length in minutes
+    val dailyLimit: Int = 50
+)
+
+data class AdwardSettings(
+    val adstraConfig: NetworkTaskConfig = NetworkTaskConfig(
+        networkId = "adstra",
+        displayName = "Adsterra",
+        visitDurationSeconds = 15,
+        rewardPoints = 25.0,
+        breakFrequency = 10,
+        breakDurationMinutes = 5,
+        dailyLimit = 50
+    ),
+    val bloggerConfig: NetworkTaskConfig = NetworkTaskConfig(
+        networkId = "blogger",
+        displayName = "Blogger",
+        visitDurationSeconds = 20,
+        rewardPoints = 20.0,
+        breakFrequency = 10,
+        breakDurationMinutes = 10,
+        dailyLimit = 50
+    ),
+    val monetagConfig: NetworkTaskConfig = NetworkTaskConfig(
+        networkId = "monetag",
+        displayName = "Monetag",
+        visitDurationSeconds = 30,
+        rewardPoints = 30.0,
+        breakFrequency = 10,
+        breakDurationMinutes = 15,
+        dailyLimit = 50
+    )
+) {
+    fun getConfigForNetwork(networkType: String): NetworkTaskConfig {
+        return when (networkType.lowercase().trim()) {
+            "adstra", "adsterra" -> adstraConfig
+            "blogger" -> bloggerConfig
+            "monetag" -> monetagConfig
+            else -> adstraConfig
+        }
+    }
+}
+
+data class AdminDirectLink(
+    val id: String = "",
+    val title: String = "",
+    val url: String = "",
+    val networkType: String = "all", // "all", "adstra", "blogger", "monetag"
+    val frequency: Int = 10, // Show after every X user visits (e.g. 10 or 20 visits)
+    val isActive: Boolean = true,
+    val viewsServed: Int = 0,
+    val createdDate: String = "Today",
+    val timestamp: Long = System.currentTimeMillis()
+)
+
+data class VisitTargetInfo(
+    val url: String,
+    val title: String,
+    val isSelf: Boolean = false,
+    val campaignId: String? = null,
+    val adminLinkId: String? = null,
+    val isSponsoredAdminLink: Boolean = false
+)
+
 
 

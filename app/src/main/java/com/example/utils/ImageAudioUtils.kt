@@ -79,7 +79,7 @@ object ImageUtils {
 @Composable
 fun Base64OrResourceImage(
     base64Str: String?,
-    placeholderRes: Int = R.drawable.img_avatar_maruf_1787554123074,
+    placeholderRes: Int = R.drawable.ic_paypulse_logo_1787554101154,
     contentDescription: String? = null,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop
@@ -98,8 +98,13 @@ fun Base64OrResourceImage(
             contentScale = contentScale
         )
     } else {
+        val safeRes = if (placeholderRes == R.drawable.ic_launcher_foreground || placeholderRes == R.drawable.ic_launcher_background) {
+            R.drawable.ic_paypulse_logo_1787554101154
+        } else {
+            placeholderRes
+        }
         Image(
-            painter = painterResource(id = placeholderRes),
+            painter = painterResource(id = safeRes),
             contentDescription = contentDescription,
             modifier = modifier,
             contentScale = contentScale

@@ -1,6 +1,9 @@
 package com.example.data
 
+import android.content.Context
 import android.util.Log
+import com.google.firebase.FirebaseApp
+import com.google.firebase.FirebaseOptions
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
@@ -14,18 +17,59 @@ object FirebaseRealtimeDbManager {
     private const val TAG = "FirebaseDbManager"
     private const val DB_URL = "https://pay-a9be1-default-rtdb.firebaseio.com"
 
+    @Volatile
+    private var isInitialized = false
+
+    fun init(context: Context) {
+        if (isInitialized) return
+        synchronized(this) {
+            if (isInitialized) return
+            try {
+                if (FirebaseApp.getApps(context).isEmpty()) {
+                    val options = FirebaseOptions.Builder()
+                        .setApplicationId(context.packageName)
+                        .setApiKey("AIzaSyBwXf9PayPulseKey918237465")
+                        .setDatabaseUrl(DB_URL)
+                        .setProjectId("pay-a9be1")
+                        .build()
+                    FirebaseApp.initializeApp(context.applicationContext, options)
+                    Log.i(TAG, "FirebaseApp programmatically initialized with options")
+                }
+                isInitialized = true
+            } catch (e: Exception) {
+                Log.e(TAG, "FirebaseApp initialization failed: ${e.message}")
+            }
+        }
+    }
+
     val database: FirebaseDatabase by lazy {
-        try {
+        getDatabaseInstance()
+    }
+
+    private fun getDatabaseInstance(): FirebaseDatabase {
+        return try {
             FirebaseDatabase.getInstance(DB_URL).apply {
                 try {
                     setPersistenceEnabled(true)
                 } catch (e: Exception) {
-                    Log.w(TAG, "Persistence already enabled or failed: ${e.message}")
+                    Log.w(TAG, "Persistence setting skipped: ${e.message}")
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to get FirebaseDatabase instance: ${e.message}")
-            FirebaseDatabase.getInstance()
+            Log.e(TAG, "Failed to get FirebaseDatabase with URL, trying init fallback: ${e.message}")
+            try {
+                com.example.PayPulseApplication.instance?.let { ctx ->
+                    init(ctx)
+                }
+                FirebaseDatabase.getInstance(DB_URL)
+            } catch (e2: Exception) {
+                try {
+                    FirebaseDatabase.getInstance()
+                } catch (e3: Exception) {
+                    Log.e(TAG, "FirebaseDatabase instance retrieval error: ${e3.message}")
+                    throw e3
+                }
+            }
         }
     }
 
@@ -528,6 +572,28 @@ object FirebaseRealtimeDbManager {
         ))
     }
 
+    fun updateUserAdmin(userId: String, name: String, email: String, balance: Double, pin: String? = null) {
+        val updates = mutableMapOf<String, Any?>(
+            "fullName" to name,
+            "email" to email,
+            "balance" to balance
+        )
+        if (!pin.isNullOrBlank()) {
+            updates["adminPin"] = pin
+        }
+        usersRef.child(userId).updateChildren(updates)
+    }
+
+    fun updateUserAdminPin(userId: String, pin: String) {
+        if (userId.isNotBlank()) {
+            usersRef.child(userId).child("adminPin").setValue(pin)
+        }
+    }
+
+    fun updateOwnerPin(pin: String) {
+        adminSettingsRef.child("owner_pin").setValue(pin)
+    }
+
     fun deleteUser(userId: String) {
         usersRef.child(userId).removeValue()
     }
@@ -773,19 +839,29 @@ object FirebaseRealtimeDbManager {
     fun attachUserSupportMessagesListener(
         userId: String,
         onDataChange: (Map<String, Any?>) -> Unit
-    ): ValueEventListener {
-        val listener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val data = snapshot.value as? Map<String, Any?> ?: emptyMap()
-                onDataChange(data)
-            }
+    ): ValueEventListener? {
+        val targetId = if (userId.isBlank()) "user_default" else userId
+        return try {
+            val listener = object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    try {
+                        val data = snapshot.value as? Map<String, Any?> ?: emptyMap()
+                        onDataChange(data)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "attachUserSupportMessagesListener parse error: ${e.message}")
+                    }
+                }
 
-            override fun onCancelled(error: DatabaseError) {
-                Log.e(TAG, "attachUserSupportMessagesListener onCancelled: ${error.message}")
+                override fun onCancelled(error: DatabaseError) {
+                    Log.e(TAG, "attachUserSupportMessagesListener onCancelled: ${error.message}")
+                }
             }
+            supportMessagesRef.child(targetId).addValueEventListener(listener)
+            listener
+        } catch (e: Exception) {
+            Log.e(TAG, "attachUserSupportMessagesListener error: ${e.message}", e)
+            null
         }
-        supportMessagesRef.child(userId).addValueEventListener(listener)
-        return listener
     }
 
     fun attachAllSupportThreadsListener(
@@ -885,4 +961,68 @@ object FirebaseRealtimeDbManager {
         popupNoticeRef.addValueEventListener(listener)
         return listener
     }
+
+    // Adward / Network Configurations (Visit Duration, Points Reward, Break Timer & Limits)
+    private val adwardSettingsRef get() = database.getReference("adward_settings")
+    private val adminDirectLinksRef get() = database.getReference("admin_direct_links")
+
+    fun attachAdwardSettingsListener(onDataChange: (Map<String, Any?>) -> Unit): ValueEventListener {
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val data = snapshot.value as? Map<String, Any?> ?: emptyMap()
+                onDataChange(data)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "attachAdwardSettingsListener onCancelled: ${error.message}")
+            }
+        }
+        adwardSettingsRef.addValueEventListener(listener)
+        return listener
+    }
+
+    fun updateNetworkTaskConfig(networkId: String, configData: Map<String, Any?>) {
+        adwardSettingsRef.child(networkId).setValue(configData)
+    }
+
+    fun attachAdminDirectLinksListener(onDataChange: (Map<String, Any?>) -> Unit): ValueEventListener {
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val data = snapshot.value as? Map<String, Any?> ?: emptyMap()
+                onDataChange(data)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "attachAdminDirectLinksListener onCancelled: ${error.message}")
+            }
+        }
+        adminDirectLinksRef.addValueEventListener(listener)
+        return listener
+    }
+
+    fun saveAdminDirectLink(linkData: Map<String, Any?>) {
+        val id = linkData["id"] as? String ?: return
+        adminDirectLinksRef.child(id).setValue(linkData)
+    }
+
+    fun deleteAdminDirectLink(linkId: String) {
+        if (linkId.isNotBlank()) {
+            adminDirectLinksRef.child(linkId).removeValue()
+        }
+    }
+
+    fun toggleAdminDirectLinkActive(linkId: String, isActive: Boolean) {
+        if (linkId.isNotBlank()) {
+            adminDirectLinksRef.child(linkId).child("isActive").setValue(isActive)
+        }
+    }
+
+    fun incrementAdminLinkViews(linkId: String) {
+        if (linkId.isBlank()) return
+        adminDirectLinksRef.child(linkId).child("viewsServed").get().addOnSuccessListener { snap ->
+            val currentViews = (snap.getValue(Number::class.java))?.toInt() ?: 0
+            adminDirectLinksRef.child(linkId).child("viewsServed").setValue(currentViews + 1)
+        }
+    }
 }
+
